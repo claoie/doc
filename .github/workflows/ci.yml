@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # PR runs share a group so a new push cancels the old run. Pushes to main get
+  # one group per commit, so no merged commit is left without a check.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: doc
+          POSTGRES_PASSWORD: doc
+          POSTGRES_DB: doc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U doc -d doc_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://doc:doc@localhost:5432/doc_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Installs the Bun version pinned by `packageManager` in package.json.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+  # Builds the production image and runs it against Postgres until its health
+  # check passes, so a broken image fails the PR instead of the deploy.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --tag doc:ci .
+
+      - name: Run image
+        env:
+          POSTGRES_USER: doc
+          POSTGRES_PASSWORD: doc
+          POSTGRES_DB: doc
+        run: |
+          docker network create ci
+          docker run -d --name pg --network ci -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:16-alpine
+          # During first start Postgres answers on its socket before it listens on TCP.
+          for i in $(seq 1 60); do docker exec pg pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1 && break; sleep 1; done
+          docker run -d --name app --network ci --memory=128m -e APP_URL=http://localhost:3000 \
+            -e DATABASE_URL="postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@pg:5432/$POSTGRES_DB" doc:ci
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' app)
+            if [ "$status" = healthy ]; then echo "healthy after ${i}s"; exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' app)" != true ]; then break; fi
+            sleep 1
+          done
+          docker logs app
+          exit 1

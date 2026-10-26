@@ -1,0 +1,12 @@
+node_modules
+build
+data
+coverage
+.git
+.github
+.vite
+.env
+.env.*
+!.env.example
+*.log
+docs
