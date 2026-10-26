@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/index.css">
+<style>
+html,body,#app{margin:0;height:100%;}
+.bar{position:fixed;top:10px;right:12px;z-index:10;display:flex;gap:8px;font-family:system-ui,sans-serif}
+.bar button{padding:6px 14px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:14px}
+.bar button.primary{background:#2b6cde;color:#fff;border-color:#2b6cde}
+</style></head><body><div id="app"></div>
+<script type="module">
+import React from "https://esm.sh/react@19.2.0";
+import { createRoot } from "https://esm.sh/react-dom@19.2.0/client";
+import { Excalidraw, exportToSvg, loadFromBlob } from "https://esm.sh/@excalidraw/excalidraw@0.18.0?deps=react@19.2.0,react-dom@19.2.0";
+const h = React.createElement;
+let api = null;
+const send = (msg) => parent.postMessage({ source: "excalidraw-frame", ...msg }, "*");
+window.addEventListener("message", async (e) => {
+  if (e.data?.source !== "doc-app") return;
+  if (e.data.type === "load" && e.data.svg) {
+    try {
+      const scene = await loadFromBlob(new Blob([e.data.svg], { type: "image/svg+xml" }), null, null);
+      api?.updateScene({ elements: scene.elements, appState: { ...scene.appState, collaborators: new Map() } });
+      if (scene.files) api?.addFiles(Object.values(scene.files));
+    } catch (err) { console.error(err); }
+  }
+});
+const save = async () => {
+  const elements = api.getSceneElements();
+  const svg = await exportToSvg({ elements, appState: { ...api.getAppState(), exportEmbedScene: true, exportBackground: true }, files: api.getFiles() });
+  const bbox = svg.viewBox?.baseVal;
+  send({ type: "save", svg: svg.outerHTML, width: bbox?.width, height: bbox?.height });
+};
+const App = () => h("div", { style: { height: "100%" } },
+  h("div", { className: "bar" },
+    h("button", { onClick: () => send({ type: "close" }) }, "Cancel"),
+    h("button", { className: "primary", onClick: save }, "Save")),
+  h(Excalidraw, { excalidrawAPI: (a) => { api = a; send({ type: "ready" }); } }));
+createRoot(document.getElementById("app")).render(h(App));
+</script></body></html>
