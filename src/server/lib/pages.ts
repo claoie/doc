@@ -234,7 +234,8 @@ const UPDATE_NOTIFY_COOLDOWN = "7 hours";
  * Persists collaborative content: text, version, editors, links and synced
  * blocks; snapshots a version when the last one is old enough; notifies newly
  * mentioned users and page/space watchers. Returns false, saving nothing, when
- * the stored version isn't `baseVersion`.
+ * the stored version isn't `baseVersion`. Nothing after the commit may reject:
+ * the caller would retry from a version that's no longer stored, and be refused.
  */
 export const savePageContent = async (pageId: string, input: SaveContentInput): Promise<boolean> => {
   const editors = [...new Set([input.editorId, ...input.contributorIds].filter(isUuid))];
@@ -269,9 +270,9 @@ export const savePageContent = async (pageId: string, input: SaveContentInput): 
   if (result === "conflict") return false;
   if (!result || result.deleted) return true;
 
-  await watchPage(pageId, editors);
   const actorId = isUuid(input.editorId) ? input.editorId : (editors[0] ?? null);
   try {
+    await watchPage(pageId, editors);
     const before = new Set(docMentionedUserIds(result.previousContent));
     const mentioned = docMentionedUserIds(input.content).filter((id) => isUuid(id) && !before.has(id));
     const notified = new Set(

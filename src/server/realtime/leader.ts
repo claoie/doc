@@ -22,6 +22,8 @@ let leadUntil = 0;
 let running = false;
 let leading = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** The latest claim. A release waits for it, or the claim could land after and put the row back. */
+let claiming: Promise<void> = Promise.resolve();
 
 export const isLeader = () => performance.now() < leadUntil;
 
@@ -37,11 +39,8 @@ const claim = async () => {
 };
 
 const tick = async () => {
-  try {
-    await claim();
-  } catch (error) {
-    log.error("claiming the realtime lease failed", error);
-  }
+  claiming = claim().catch((error) => log.error("claiming the realtime lease failed", error));
+  await claiming;
   if (isLeader() !== leading) {
     leading = !leading;
     log.info(leading ? "leading realtime" : "no longer leading realtime");
@@ -70,5 +69,6 @@ export const stopLeading = () => {
 };
 
 export const releaseLease = async () => {
+  await claiming;
   await sql`DELETE FROM realtime_leader WHERE holder = ${holder}`;
 };

@@ -149,6 +149,38 @@ describe("realtime collaboration", () => {
     a.ws.close();
   });
 
+  test("a failure after a save commits doesn't turn the next save into a conflict", async () => {
+    const page = await createPage();
+    const a = await connect(owner);
+    a.send({ t: "join", pageId: page.id, version: 0, clientId: "a" });
+    await a.next((m) => m.t === "joined");
+    const addMark = async (version: number, from: number) => {
+      a.send({ t: "steps", pageId: page.id, version, clientId: "a", steps: [{ stepType: "replace", from, to: from, slice: [{ t: "!" }] }] });
+      await a.next((m) => m.t === "steps");
+    };
+    const storedAt = async (version: number) => {
+      for (let i = 0; i < 100; i++) {
+        const [row] = await sql`SELECT content, doc_version FROM pages WHERE id = ${page.id}`;
+        if (Number(row.doc_version) === version) return row.content;
+        await Bun.sleep(50);
+      }
+      throw new Error(`the page never saved version ${version}`);
+    };
+
+    await sql.unsafe(`CREATE OR REPLACE FUNCTION refuse_watcher() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no watchers'; END $$`);
+    await sql.unsafe(`CREATE OR REPLACE TRIGGER refuse_watcher BEFORE INSERT ON watchers FOR EACH ROW EXECUTE FUNCTION refuse_watcher()`);
+    try {
+      await addMark(0, 6);
+      await storedAt(1);
+      await addMark(1, 7);
+      expect(await storedAt(2)).toEqual(doc("hello!!"));
+    } finally {
+      await sql.unsafe(`DROP TRIGGER refuse_watcher ON watchers`);
+      await sql.unsafe(`DROP FUNCTION refuse_watcher`);
+    }
+    a.ws.close();
+  }, 15_000);
+
   test("editors lose access when removed from the space and go read-only when demoted", async () => {
     const created = await owner.post("/spaces", { name: "Private", slug: `private-${Date.now()}` });
     const space = created.body.data.space;

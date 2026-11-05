@@ -106,6 +106,7 @@ afterAll(async () => {
 describe("two copies of the server", () => {
   let first: Copy;
   let second: Copy;
+  let third: Copy;
 
   test("only the leader takes sockets and content; the rest of the API works on both", async () => {
     first = await startCopy();
@@ -156,11 +157,32 @@ describe("two copies of the server", () => {
   }, 20_000);
 
   test("when a leader dies, a successor waits for its lease to run out", async () => {
-    const successor = await startCopy();
+    third = await startCopy();
     second.proc.kill("SIGKILL");
     await second.proc.exited;
-    expect(await leads(successor)).toBe(false);
+    expect(await leads(third)).toBe(false);
     // The lease has at least its length minus one renewal left.
-    expect(await untilLeading(successor, 12_000)).toBeGreaterThan(5000);
+    expect(await untilLeading(third, 12_000)).toBeGreaterThan(5000);
   }, 30_000);
+
+  test("a renewal still running at shutdown doesn't bring the lease back", async () => {
+    const sleeping = async () => {
+      const [row] = await sql`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event = 'PgSleep'`;
+      return row.n > 0;
+    };
+    // This runs before the renewal touches the row, so a release can overtake it.
+    await sql.unsafe(`CREATE OR REPLACE FUNCTION slow_claim() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(1); RETURN NEW; END $$`);
+    await sql.unsafe(`CREATE OR REPLACE TRIGGER slow_claim BEFORE INSERT ON realtime_leader FOR EACH ROW EXECUTE FUNCTION slow_claim()`);
+    try {
+      for (let i = 0; i < 300 && !(await sleeping()); i++) await Bun.sleep(20);
+      expect(await sleeping()).toBe(true);
+      third.proc.kill("SIGTERM");
+      await third.proc.exited;
+      for (let i = 0; i < 100 && (await sleeping()); i++) await Bun.sleep(20);
+      expect((await sql`SELECT holder FROM realtime_leader`).length).toBe(0);
+    } finally {
+      await sql.unsafe(`DROP TRIGGER slow_claim ON realtime_leader`);
+      await sql.unsafe(`DROP FUNCTION slow_claim`);
+    }
+  }, 20_000);
 });
