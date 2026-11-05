@@ -65,6 +65,19 @@ automatically on start. All settings are listed in [`.env.example`](.env.example
 Put the app behind a reverse proxy that terminates TLS and forwards WebSocket upgrades on `/api/ws`, and
 set `TRUST_PROXY=true` so rate limiting sees real client IPs.
 
+### Rolling deploys
+
+Two copies of the server can run side by side on one database while a new version replaces an old one.
+One copy at a time leads realtime editing, through a lease in the database. The others serve the rest of
+the API and close sockets on `/api/ws` as they open, and clients reconnect until they reach the leader.
+
+A leader that receives SIGTERM closes its sockets, saves every open page and releases the lease, and the
+next copy takes over within a second. Give it time to stop before a SIGKILL: a leader that dies without
+stopping keeps the lease for up to 10 seconds, and loses edits not saved yet.
+
+Both versions run against the same database for a while, so migrations have to keep working with the
+previous version of the code: add to the schema, and only remove what it no longer uses.
+
 ## Development
 
 Requirements: [Bun](https://bun.sh) and a local Postgres.
@@ -97,7 +110,9 @@ bun run build && bun run start
 
 Collaboration uses a central authority: the server holds each open document and a version number and
 accepts a batch of changes only when it was made against the current version; clients rebase their
-pending changes on top of the ones they missed.
+pending changes on top of the ones they missed. Only the copy of the server that holds the realtime lease
+(`src/server/realtime/leader.ts`) does this, so a document never has two authorities. As a backstop, a
+save applies only on top of the version it loaded; otherwise the page's editors restart from what is stored.
 
 ## License
 

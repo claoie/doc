@@ -229,6 +229,10 @@ editors, at most once per page per user every 7 hours.
 
 One WebSocket per tab at `/api/ws` (session cookie). Messages are JSON objects with a `t` field.
 
+When two copies of the server run side by side, only the one that leads realtime keeps sockets open. Any other
+closes them with `1013`, and clients reconnect until they reach the leader. A server shutting down closes its
+sockets with `1001`.
+
 Client → server:
 
 | t | fields | meaning |

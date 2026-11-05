@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "server/db";
 import { doc, startTestServer, type Client, type TestContext } from "server/test-helpers";
 
 let t: TestContext;
@@ -125,6 +126,26 @@ describe("realtime collaboration", () => {
     const res = await owner.post(`/pages/${page.id}/content`, { content: doc("replaced") });
     expect(res.status).toBe(200);
     expect(await a.next((m) => m.t === "steps")).toMatchObject({ clientIds: ["server"], version: 1 });
+    a.ws.close();
+  });
+
+  test("a save over a page that changed elsewhere resets its editors instead of overwriting it", async () => {
+    const page = await createPage();
+    const a = await connect(owner);
+    a.send({ t: "join", pageId: page.id, version: 0, clientId: "a" });
+    await a.next((m) => m.t === "joined");
+    await sql`UPDATE pages SET content = ${doc("elsewhere")}::jsonb, doc_version = 7 WHERE id = ${page.id}`;
+
+    a.send({ t: "steps", pageId: page.id, version: 0, clientId: "a", steps: [{ stepType: "replace", from: 6, to: 6, slice: [{ t: "!" }] }] });
+    await a.next((m) => m.t === "steps");
+    expect(await a.next((m) => m.t === "error")).toMatchObject({ pageId: page.id });
+    expect(await a.next((m) => m.t === "joined")).toMatchObject({ version: 7, doc: doc("elsewhere") });
+    const saved = await owner.get(`/pages/${page.slugId}`);
+    expect(saved.body.data.page.content).toEqual(doc("elsewhere"));
+    expect(saved.body.data.page.docVersion).toBe(7);
+
+    a.send({ t: "steps", pageId: page.id, version: 7, clientId: "a", steps: [{ stepType: "replace", from: 10, to: 10, slice: [{ t: "!" }] }] });
+    expect(await a.next((m) => m.t === "steps")).toMatchObject({ version: 8 });
     a.ws.close();
   });
 

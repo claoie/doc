@@ -32,11 +32,15 @@ class PageSession {
   private firstDirtyAt = 0;
   private saving: Promise<void> | null = null;
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The stored version the next save replaces. */
+  private savedVersion: number;
 
   constructor(
     readonly pageId: string,
-    readonly authority: Authority,
-  ) {}
+    public authority: Authority,
+  ) {
+    this.savedVersion = authority.version;
+  }
 
   scheduleSave() {
     const now = Date.now();
@@ -60,8 +64,13 @@ class PageSession {
       docVersion: this.authority.version,
       editorId: this.lastEditor,
       contributorIds: contributors,
+      baseVersion: this.savedVersion,
     };
     this.saving = savePageContent(this.pageId, input)
+      .then((saved) => {
+        if (saved) this.savedVersion = input.docVersion;
+        else return this.reload();
+      })
       .catch((error) => {
         // Keep the changes in memory and try again on the next edit or close.
         this.dirty = true;
@@ -72,6 +81,29 @@ class PageSession {
         this.saving = null;
       });
     await this.saving;
+  }
+
+  /**
+   * Something else saved this page since this session loaded it. Realtime
+   * has one leader, so that means the lease failed. The two histories can't
+   * be merged: every client restarts from what is stored, and is told so,
+   * rather than one side silently overwriting the other.
+   */
+  private async reload() {
+    log.warn("page changed outside its session; reloading it", { pageId: this.pageId });
+    const row = await loadPageForCollab(this.pageId);
+    if (!row) return;
+    this.authority = new Authority(schema, storedDoc(row.content), row.docVersion);
+    this.savedVersion = row.docVersion;
+    this.dirty = false;
+    this.firstDirtyAt = 0;
+    this.editors.clear();
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    for (const [ws, client] of this.clients) {
+      send(ws, { t: "error", pageId: this.pageId, message: "This page changed elsewhere; your latest edits could not be saved." });
+      send(ws, { t: "joined", pageId: this.pageId, version: row.docVersion, doc: this.authority.doc, readOnly: client.readOnly });
+    }
   }
 
   broadcast(message: Record<string, unknown>, except?: Socket) {
@@ -95,6 +127,8 @@ class PageSession {
   }
 }
 
+const storedDoc = (content: Node | null) => (content && (content.content ?? []).length ? content : emptyDoc());
+
 const sessions = new Map<string, Promise<PageSession | null>>();
 
 const openSession = (pageId: string): Promise<PageSession | null> => {
@@ -102,8 +136,7 @@ const openSession = (pageId: string): Promise<PageSession | null> => {
   if (!pending) {
     pending = loadPageForCollab(pageId).then((row) => {
       if (!row) return null;
-      const doc = row.content && (row.content.content ?? []).length ? row.content : emptyDoc();
-      return new PageSession(pageId, new Authority(schema, doc, row.docVersion));
+      return new PageSession(pageId, new Authority(schema, storedDoc(row.content), row.docVersion));
     });
     pending.catch(() => sessions.delete(pageId));
     sessions.set(pageId, pending);
@@ -279,7 +312,7 @@ export const replacePageContent = async (pageId: string, content: Node, userId: 
   session.lastEditor = userId;
   await session.save();
   // A failed save stays in memory for the next save attempt; report it.
-  if (session.dirty) throw new Error("Saving the page failed");
+  if (session.dirty || session.authority !== authority) throw new Error("Saving the page failed");
   if (session.clients.size === 0) sessions.delete(pageId);
   return true;
 };

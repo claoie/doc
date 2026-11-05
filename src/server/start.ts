@@ -7,6 +7,7 @@ import { purgeExpiredSessions } from "server/lib/auth";
 import { log } from "server/lib/logger";
 import { flushMail } from "server/lib/mail";
 import { purgeTrash } from "server/lib/pages";
+import { startLeading } from "server/realtime/leader";
 import { shutdownRealtime } from "server/realtime/ws";
 import type { SocketData } from "server/realtime/hub";
 
@@ -35,6 +36,7 @@ const runHousekeeping = async () => {
 const main = async () => {
   connect(config.databaseUrl, config.databasePoolMax);
   await migrate();
+  await startLeading();
   const staticDir = resolveStaticDir();
   const app = createApp({ staticDir });
   const server = Bun.serve<SocketData>({

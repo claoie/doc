@@ -8,6 +8,7 @@ import { flushMail, setMailTransport, type Mail } from "server/lib/mail";
 import { resetRateLimits } from "server/lib/ratelimit";
 import { resetStorage } from "server/lib/storage";
 import type { SocketData } from "server/realtime/hub";
+import { releaseLease, startLeading, stopLeading } from "server/realtime/leader";
 
 export interface TestResponse<T = any> {
   status: number;
@@ -97,6 +98,7 @@ export const startTestServer = async (): Promise<TestContext> => {
   connect(url, 5);
   await sql.unsafe("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
   await migrate();
+  await startLeading();
 
   const outbox: Mail[] = [];
   setMailTransport(async (mail) => {
@@ -143,6 +145,8 @@ export const startTestServer = async (): Promise<TestContext> => {
       await flushMail();
       setMailTransport(null);
       server.stop(true);
+      stopLeading();
+      await releaseLease();
       rmSync(storageDir, { recursive: true, force: true });
     },
   };

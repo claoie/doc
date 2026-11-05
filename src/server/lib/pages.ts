@@ -224,6 +224,8 @@ export interface SaveContentInput {
   docVersion: number;
   editorId: string | null;
   contributorIds: readonly string[];
+  /** The stored version this save replaces; any other version refuses it. */
+  baseVersion?: number;
 }
 
 const UPDATE_NOTIFY_COOLDOWN = "7 hours";
@@ -231,13 +233,15 @@ const UPDATE_NOTIFY_COOLDOWN = "7 hours";
 /**
  * Persists collaborative content: text, version, editors, links and synced
  * blocks; snapshots a version when the last one is old enough; notifies newly
- * mentioned users and page/space watchers.
+ * mentioned users and page/space watchers. Returns false, saving nothing, when
+ * the stored version isn't `baseVersion`.
  */
-export const savePageContent = async (pageId: string, input: SaveContentInput): Promise<void> => {
+export const savePageContent = async (pageId: string, input: SaveContentInput): Promise<boolean> => {
   const editors = [...new Set([input.editorId, ...input.contributorIds].filter(isUuid))];
   const result = await sql.begin(async (tx) => {
-    const [previous] = await tx`SELECT content, space_id, deleted_at FROM pages WHERE id = ${pageId} FOR UPDATE`;
+    const [previous] = await tx`SELECT content, space_id, deleted_at, doc_version FROM pages WHERE id = ${pageId} FOR UPDATE`;
     if (!previous) return null;
+    if (input.baseVersion !== undefined && Number(previous.doc_version) !== input.baseVersion) return "conflict";
     await tx`
       UPDATE pages SET
         content = ${input.content}::jsonb,
@@ -262,7 +266,8 @@ export const savePageContent = async (pageId: string, input: SaveContentInput): 
         )`;
     return { previousContent: previous.content as Node | null, spaceId: previous.space_id as string, deleted: !!previous.deleted_at };
   });
-  if (!result || result.deleted) return;
+  if (result === "conflict") return false;
+  if (!result || result.deleted) return true;
 
   await watchPage(pageId, editors);
   const actorId = isUuid(input.editorId) ? input.editorId : (editors[0] ?? null);
@@ -290,6 +295,7 @@ export const savePageContent = async (pageId: string, input: SaveContentInput): 
   } catch (error) {
     log.error("page notifications failed", error, { pageId });
   }
+  return true;
 };
 
 /** Permanently deletes pages matching `rootCondition` and all their descendants, with their files. */
