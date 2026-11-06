@@ -139,7 +139,17 @@ export const api = {
   createPage: (body: { spaceId: string; parentId?: string | null; title?: string; icon?: string; content?: Node; afterId?: string | null }) =>
     post<T.PageResponse>("/pages", body),
   updatePage: (id: string, body: Partial<{ title: string; icon: string | null; cover: string | null }>) => post<T.PageResponse>(`/pages/${id}/update`, body),
-  setPageContent: (id: string, content: Node) => post<T.PageResponse>(`/pages/${id}/content`, { content }),
+  setPageContent: async (id: string, content: Node) => {
+    // During a rolling deploy this may reach a copy that isn't the realtime leader.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await post<T.PageResponse>(`/pages/${id}/content`, { content });
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "not_leader" || attempt === 20) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  },
   movePage: (id: string, parentId: string | null, afterId: string | null) => post<T.PageResponse>(`/pages/${id}/move`, { parentId, afterId }),
   movePageToSpace: (id: string, spaceId: string) => post<T.PageResponse>(`/pages/${id}/move-to-space`, { spaceId }),
   duplicatePage: (id: string, spaceId?: string) => post<T.PageResponse>(`/pages/${id}/duplicate`, { spaceId }),

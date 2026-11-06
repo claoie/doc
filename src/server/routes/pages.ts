@@ -5,7 +5,7 @@ import { docText } from "common/text";
 import { sql } from "server/db";
 import { validateDoc } from "server/lib/content";
 import { duplicatePage } from "server/lib/duplicate";
-import { badRequest, get, notFound, post, readJson } from "server/lib/http";
+import { badRequest, get, HttpError, notFound, post, readJson } from "server/lib/http";
 import { watchPage } from "server/lib/notifications";
 import {
   breadcrumbs,
@@ -28,6 +28,7 @@ import { iso, userRefs } from "server/lib/users";
 import { Input, input } from "server/lib/validate";
 import { emitToSpace } from "server/realtime/hub";
 import { refreshOpenSessions, replacePageContent } from "server/realtime/collab";
+import { isLeader } from "server/realtime/leader";
 import { log } from "server/lib/logger";
 
 const TITLE_RULE = { min: 0, max: 500 };
@@ -182,6 +183,7 @@ export const routes = [
     const { page } = await requirePage(ctx.user, ctx.params.id!, "writer");
     const body = (await readJson(ctx, PAGE_BODY_LIMIT)) as { content?: unknown };
     const content = validateDoc(body?.content);
+    if (!isLeader()) throw new HttpError(503, "not_leader", "Another copy of the server runs realtime; try again");
     const replaced = await replacePageContent(page.id, content, ctx.user.id).catch((error: Error) => {
       if (error.message === "too-large") throw badRequest("content is too large");
       if (error.message === "invalid") throw badRequest("Content does not fit the document format");

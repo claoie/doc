@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "server/db";
 import { doc, startTestServer, type Client, type TestContext } from "server/test-helpers";
 
 let t: TestContext;
@@ -127,6 +128,58 @@ describe("realtime collaboration", () => {
     expect(await a.next((m) => m.t === "steps")).toMatchObject({ clientIds: ["server"], version: 1 });
     a.ws.close();
   });
+
+  test("a save over a page that changed elsewhere resets its editors instead of overwriting it", async () => {
+    const page = await createPage();
+    const a = await connect(owner);
+    a.send({ t: "join", pageId: page.id, version: 0, clientId: "a" });
+    await a.next((m) => m.t === "joined");
+    await sql`UPDATE pages SET content = ${doc("elsewhere")}::jsonb, doc_version = 7 WHERE id = ${page.id}`;
+
+    a.send({ t: "steps", pageId: page.id, version: 0, clientId: "a", steps: [{ stepType: "replace", from: 6, to: 6, slice: [{ t: "!" }] }] });
+    await a.next((m) => m.t === "steps");
+    expect(await a.next((m) => m.t === "error")).toMatchObject({ pageId: page.id });
+    expect(await a.next((m) => m.t === "joined")).toMatchObject({ version: 7, doc: doc("elsewhere") });
+    const saved = await owner.get(`/pages/${page.slugId}`);
+    expect(saved.body.data.page.content).toEqual(doc("elsewhere"));
+    expect(saved.body.data.page.docVersion).toBe(7);
+
+    a.send({ t: "steps", pageId: page.id, version: 7, clientId: "a", steps: [{ stepType: "replace", from: 10, to: 10, slice: [{ t: "!" }] }] });
+    expect(await a.next((m) => m.t === "steps")).toMatchObject({ version: 8 });
+    a.ws.close();
+  });
+
+  test("a failure after a save commits doesn't turn the next save into a conflict", async () => {
+    const page = await createPage();
+    const a = await connect(owner);
+    a.send({ t: "join", pageId: page.id, version: 0, clientId: "a" });
+    await a.next((m) => m.t === "joined");
+    const addMark = async (version: number, from: number) => {
+      a.send({ t: "steps", pageId: page.id, version, clientId: "a", steps: [{ stepType: "replace", from, to: from, slice: [{ t: "!" }] }] });
+      await a.next((m) => m.t === "steps");
+    };
+    const storedAt = async (version: number) => {
+      for (let i = 0; i < 100; i++) {
+        const [row] = await sql`SELECT content, doc_version FROM pages WHERE id = ${page.id}`;
+        if (Number(row.doc_version) === version) return row.content;
+        await Bun.sleep(50);
+      }
+      throw new Error(`the page never saved version ${version}`);
+    };
+
+    await sql.unsafe(`CREATE OR REPLACE FUNCTION refuse_watcher() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no watchers'; END $$`);
+    await sql.unsafe(`CREATE OR REPLACE TRIGGER refuse_watcher BEFORE INSERT ON watchers FOR EACH ROW EXECUTE FUNCTION refuse_watcher()`);
+    try {
+      await addMark(0, 6);
+      await storedAt(1);
+      await addMark(1, 7);
+      expect(await storedAt(2)).toEqual(doc("hello!!"));
+    } finally {
+      await sql.unsafe(`DROP TRIGGER refuse_watcher ON watchers`);
+      await sql.unsafe(`DROP FUNCTION refuse_watcher`);
+    }
+    a.ws.close();
+  }, 15_000);
 
   test("editors lose access when removed from the space and go read-only when demoted", async () => {
     const created = await owner.post("/spaces", { name: "Private", slug: `private-${Date.now()}` });

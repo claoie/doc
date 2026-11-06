@@ -6,10 +6,13 @@ import type { AuthUser } from "server/lib/auth";
 import { log } from "server/lib/logger";
 import { onMembershipChange, registry, type Socket, type SocketData } from "./hub";
 import { disconnect, flushAll, joinPage, leavePage, receiveSteps, refreshOpenSessions, updatePresence } from "./collab";
+import { isLeader, releaseLease, stopLeading } from "./leader";
 
 const MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
 /** Messages a socket may send per second before it is disconnected. */
 const MAX_MESSAGES_PER_SECOND = 60;
+/** "Try again later": clients reconnect, which reaches the leader within a try or two. */
+const NOT_LEADER = 1013;
 
 const allowedOrigin = (request: Request): boolean => {
   const origin = request.headers.get("origin");
@@ -87,9 +90,20 @@ export const websocket: WebSocketHandler<SocketData> = {
   maxPayloadLength: MAX_MESSAGE_BYTES,
   idleTimeout: 120,
   open(ws) {
+    // Turned away here, not refused at the upgrade: clients back off further
+    // after each connection that fails, and not after one that opened, so
+    // they keep trying every second or so until they reach the leader.
+    if (!isLeader()) {
+      ws.close(NOT_LEADER, "not the realtime leader");
+      return;
+    }
     registry.addSocket(ws);
   },
   async message(ws, raw) {
+    if (!isLeader()) {
+      ws.close(NOT_LEADER, "not the realtime leader");
+      return;
+    }
     const now = Date.now();
     if (now - ws.data.windowStart >= 1000) {
       ws.data.windowStart = now;
@@ -112,8 +126,14 @@ export const websocket: WebSocketHandler<SocketData> = {
   },
 };
 
-/** Called on shutdown before the database closes: persist pending state, then close sockets. */
+/**
+ * Called on shutdown before the database closes. Sockets go first so nothing
+ * is accepted after the last save: clients resend what wasn't confirmed. The
+ * lease goes last so a successor only loads documents once they are saved.
+ */
 export const shutdownRealtime = async () => {
-  await flushAll().catch((error) => log.error("flushing documents on shutdown failed", error));
+  stopLeading();
   for (const ws of registry.allSockets()) ws.close(1001, "server shutting down");
+  await flushAll().catch((error) => log.error("flushing documents on shutdown failed", error));
+  await releaseLease().catch((error) => log.error("releasing the realtime lease failed", error));
 };
