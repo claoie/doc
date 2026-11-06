@@ -91,7 +91,8 @@ jobs:
           SHA: ${{ needs.docker-push.outputs.sha }}
         run: |
           # Only the status is printed: the URL and the response stay out of public logs.
-          status=$(curl -s -o /dev/null --max-time 60 -w '%{http_code}' -X POST "$DEPLOY_URL" \
+          # The hook answers when the deploy ends, and it stops a deploy at 10 minutes.
+          status=$(curl -s -o /dev/null --max-time 660 -w '%{http_code}' -X POST "$DEPLOY_URL" \
             -H "Authorization: Bearer $DEPLOY_SECRET" \
             -H "Content-Type: application/json" \
             --data "{\"sha\":\"${SHA}\",\"repo\":\"${GITHUB_REPOSITORY}\"}") || status=000
