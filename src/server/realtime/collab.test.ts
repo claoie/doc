@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "server/db";
 import { doc, startTestServer, type Client, type TestContext } from "server/test-helpers";
+import { flushAll } from "./collab";
 
 let t: TestContext;
 let owner: Client;
@@ -241,4 +242,36 @@ describe("realtime collaboration", () => {
     a.ws.close();
     b.ws.close();
   });
+
+  test("a flush returns only after a save that started while it waited", async () => {
+    const page = await createPage();
+    const a = await connect(owner);
+    a.send({ t: "join", pageId: page.id, version: 0, clientId: "a" });
+    await a.next((m) => m.t === "joined");
+    const addMark = async (version: number, from: number) => {
+      a.send({ t: "steps", pageId: page.id, version, clientId: "a", steps: [{ stepType: "replace", from, to: from, slice: [{ t: "!" }] }] });
+      await a.next((m) => m.t === "steps");
+    };
+    const storedVersion = async () => Number((await sql`SELECT doc_version FROM pages WHERE id = ${page.id}`)[0].doc_version);
+
+    await sql.unsafe(`CREATE OR REPLACE FUNCTION slow_page_save() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$`);
+    await sql.unsafe(`CREATE OR REPLACE TRIGGER slow_page_save BEFORE UPDATE ON pages FOR EACH ROW EXECUTE FUNCTION slow_page_save()`);
+    try {
+      await addMark(0, 6);
+      const first = flushAll();
+      await Bun.sleep(100);
+      await addMark(1, 7);
+      // Both wait on the first save; whichever resumes first starts the next.
+      const second = flushAll();
+      const third = flushAll();
+      await first;
+      await third;
+      expect(await storedVersion()).toBe(2);
+      await second;
+    } finally {
+      await sql.unsafe(`DROP TRIGGER slow_page_save ON pages`);
+      await sql.unsafe(`DROP FUNCTION slow_page_save`);
+    }
+    a.ws.close();
+  }, 15_000);
 });

@@ -53,7 +53,7 @@ class PageSession {
   async save(): Promise<void> {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
-    if (this.saving) await this.saving;
+    while (this.saving) await this.saving;
     if (!this.dirty) return;
     this.dirty = false;
     this.firstDirtyAt = 0;
