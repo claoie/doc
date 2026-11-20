@@ -1,10 +1,11 @@
 import type { UserPreferences } from "common/api-types";
+import { config } from "server/config";
 import { sql } from "server/db";
 import { removeImage, saveImage } from "server/lib/files";
 import { HttpError, badRequest, conflict, formFile, get, post, readForm, readJson } from "server/lib/http";
 import { isWorkspaceAdmin } from "server/lib/permissions";
 import { getWorkspace } from "server/lib/spaces";
-import { findUserById, toUser, verifyPassword } from "server/lib/users";
+import { findUserById, ownSsoFields, toUser, verifyPassword } from "server/lib/users";
 import { EMAIL_RULE, NAME_RULE, input, normalizeEmail } from "server/lib/validate";
 
 const BOOLEAN_PREFERENCES = [
@@ -50,7 +51,7 @@ const validTimezone = (value: string) => {
 };
 
 export const routes = [
-  get("/me", async (ctx) => ({ user: toUser(ctx.user, ctx.user.id), workspace: await getWorkspace() })),
+  get("/me", async (ctx) => ({ user: { ...toUser(ctx.user, ctx.user.id), ...ownSsoFields(ctx.user) }, workspace: await getWorkspace() })),
 
   post("/me/update", async (ctx) => {
     const body = input(await readJson(ctx));
@@ -63,14 +64,31 @@ export const routes = [
     if (timezone && !validTimezone(timezone)) throw badRequest("Invalid timezone");
     const preferences: Partial<UserPreferences> | null = preferencesInput ? parsePreferences(preferencesInput) : null;
 
+    // A linked person's name comes from the identity provider, and so does
+    // their email when the provider verified it at sign-in: both are copied
+    // back then, so a change here would silently revert.
+    if (config.sso && ctx.user.auth_sub) {
+      if (name !== undefined && name !== ctx.user.name) {
+        throw new HttpError(403, "sso_managed", "Your name comes from your identity provider");
+      }
+      if (ctx.user.email_from_provider && emailInput !== undefined && normalizeEmail(emailInput) !== ctx.user.email.toLowerCase()) {
+        throw new HttpError(403, "sso_managed", "Your email comes from your identity provider");
+      }
+    }
+
     let email: string | undefined;
     if (emailInput !== undefined) {
       email = normalizeEmail(emailInput);
       if (email !== ctx.user.email.toLowerCase()) {
-        const password = body.optionalString("currentPassword", { max: 200, trim: false });
         const [row] = await sql`SELECT password_hash FROM users WHERE id = ${ctx.user.id}`;
-        if (!password || !(await verifyPassword(password, row?.password_hash ?? null))) {
-          throw new HttpError(400, "invalid_password", "Current password is incorrect");
+        // Someone single sign-on created has no password to confirm the change
+        // with; while it is on, the session the provider started stands in.
+        const passwordless = config.sso !== null && ctx.user.auth_sub !== null && !row?.password_hash;
+        if (!passwordless) {
+          const password = body.optionalString("currentPassword", { max: 200, trim: false });
+          if (!password || !(await verifyPassword(password, row?.password_hash ?? null))) {
+            throw new HttpError(400, "invalid_password", "Current password is incorrect");
+          }
         }
         const { emailDomains } = await getWorkspace();
         if (emailDomains.length && !isWorkspaceAdmin(ctx.user) && !emailDomains.includes(email.split("@")[1]!)) {
@@ -91,7 +109,7 @@ export const routes = [
         updated_at = now()
       WHERE id = ${ctx.user.id}`;
     const user = await findUserById(ctx.user.id);
-    return { user: toUser(user!, ctx.user.id) };
+    return { user: { ...toUser(user!, ctx.user.id), ...ownSsoFields(user!) } };
   }),
 
   post("/me/avatar", async (ctx) => {
@@ -102,13 +120,13 @@ export const routes = [
       WHERE u.id = ${ctx.user.id} AND old.id = u.id RETURNING old.avatar`;
     await removeImage(previous?.avatar);
     const user = await findUserById(ctx.user.id);
-    return { user: toUser(user!, ctx.user.id) };
+    return { user: { ...toUser(user!, ctx.user.id), ...ownSsoFields(user!) } };
   }),
 
   post("/me/avatar/remove", async (ctx) => {
     await sql`UPDATE users SET avatar = NULL, updated_at = now() WHERE id = ${ctx.user.id}`;
     await removeImage(ctx.user.avatar);
     const user = await findUserById(ctx.user.id);
-    return { user: toUser(user!, ctx.user.id) };
+    return { user: { ...toUser(user!, ctx.user.id), ...ownSsoFields(user!) } };
   }),
 ];

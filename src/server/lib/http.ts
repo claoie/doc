@@ -126,6 +126,10 @@ const readLimited = async (req: Request, limit: number): Promise<Uint8Array> => 
 
 export const JSON_LIMIT = 1024 * 1024;
 
+/** Reads the body as UTF-8 text, whatever its content type. */
+export const readText = async (ctx: Context, limit: number): Promise<string> =>
+  new TextDecoder().decode(await readLimited(ctx.req, limit));
+
 /**
  * Parses a JSON object body. Requiring `application/json` means a cross-site
  * form cannot submit it without a CORS preflight.

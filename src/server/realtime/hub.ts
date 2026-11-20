@@ -3,6 +3,8 @@ import type { RealtimeEvent } from "common/api-types";
 
 export interface SocketData {
   connectionId: string;
+  /** The session the socket was opened with; the leader closes the socket once it ends. */
+  sessionId: string;
   userId: string;
   userName: string;
   /** Spaces whose tree events this socket receives. */
@@ -87,7 +89,17 @@ export const membershipChanged = (userIds: readonly string[] | "all") => {
   membershipListener?.(userIds);
 };
 
+/** The close code of a socket whose session ended. */
+export const SIGNED_OUT = 4001;
+
 /** Closes every socket of a user (deactivation, deletion, password reset). */
 export const disconnectUser = (userId: string) => {
-  for (const ws of [...(byUser.get(userId) ?? [])]) ws.close(4001, "signed out");
+  for (const ws of [...(byUser.get(userId) ?? [])]) ws.close(SIGNED_OUT, "signed out");
+};
+
+/** Closes the sockets opened with these sessions. */
+export const disconnectSessions = (sessionIds: readonly string[]) => {
+  if (sessionIds.length === 0) return;
+  const ended = new Set(sessionIds);
+  for (const ws of registry.allSockets()) if (ended.has(ws.data.sessionId)) ws.close(SIGNED_OUT, "signed out");
 };

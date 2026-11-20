@@ -30,6 +30,22 @@ export interface User {
   preferences: UserPreferences;
   createdAt: string;
   lastLoginAt: string | null;
+  /**
+   * Present when single sign-on is on, for the current user and in the member
+   * list: this person is linked to the identity provider, which sets their
+   * name and role and is their only way to sign in.
+   */
+  ssoManaged?: boolean;
+  /**
+   * Present with `ssoManaged`: the provider verified this person's email at
+   * their last sign-in and manages it too. Otherwise the email is doc's own.
+   */
+  ssoManagedEmail?: boolean;
+  /**
+   * Present for the current user while single sign-on is on: whether they have
+   * a password here. People single sign-on created have none.
+   */
+  hasPassword?: boolean;
 }
 
 export interface Member extends User {
@@ -66,6 +82,16 @@ export interface PublicWorkspace {
 
 export interface SetupStatus {
   needsSetup: boolean;
+}
+
+/** How people sign in: `sso.enabled` adds single sign-on, and `sso.localLogin` keeps passwords alongside it. */
+export interface AuthConfig {
+  sso: { enabled: boolean; localLogin: boolean };
+}
+
+export interface LogoutResponse {
+  /** Where to send the browser to end the identity provider's session too. */
+  logoutUrl?: string;
 }
 
 export interface SessionInfo {

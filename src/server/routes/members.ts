@@ -5,7 +5,8 @@ import { removeImage } from "server/lib/files";
 import { badRequest, forbidden, get, notFound, post, readJson } from "server/lib/http";
 import { requireWorkspaceAdmin } from "server/lib/permissions";
 import { escapeLike } from "server/lib/search";
-import { findUserById, toMember, toUser, type UserRow } from "server/lib/users";
+import { requireLocallyManaged } from "server/lib/sso";
+import { findUserById, ssoManagedField, toMember, toUser, type UserRow } from "server/lib/users";
 import { Input, input } from "server/lib/validate";
 import { disconnectUser, membershipChanged } from "server/realtime/hub";
 import type { AuthUser } from "server/lib/auth";
@@ -40,7 +41,9 @@ export const routes = [
           (await sql`SELECT count(*) AS n FROM users u WHERE ${q} = '' OR lower(u.name) LIKE ${like} OR lower(u.email) LIKE ${like}`)[0]
             .n,
         );
-    return { items: rows.map((row: UserRow) => toMember(row, ctx.user.id)), total };
+    // With single sign-on on, members linked to it are marked, so admins see why they can't change their role here.
+    const items = rows.map((row: UserRow) => ({ ...toMember(row, ctx.user.id), ...ssoManagedField(row) }));
+    return { items, total };
   }),
 
   post("/members/role", async (ctx) => {
@@ -48,6 +51,7 @@ export const routes = [
     const role = body.oneOf("role", ROLES);
     if (!role) throw badRequest("role is required");
     const target = await targetUser(ctx.user, body.uuid("userId"), true);
+    requireLocallyManaged(target);
     if ((role === "owner" || target.role === "owner") && ctx.user.role !== "owner") {
       throw forbidden("Only owners can grant or remove the owner role");
     }

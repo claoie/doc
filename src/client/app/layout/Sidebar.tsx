@@ -97,7 +97,9 @@ export const Sidebar = ({ onSignedOut }: { onSignedOut: () => void }) => {
           label: "Sign out",
           icon: "logout",
           onSelect: async () => {
-            await api.logout().catch(() => undefined);
+            const res = await api.logout().catch(() => null);
+            // Signed in through single sign-on: the provider ends its own session, then sends the browser back.
+            if (res?.logoutUrl) return window.location.assign(res.logoutUrl);
             onSignedOut();
             navigate("/login", { replace: true });
           },

@@ -7,7 +7,8 @@ import { renderMail } from "server/lib/emails";
 import { HttpError, badRequest, forbidden, get, post, publicGet, publicPost, readJson } from "server/lib/http";
 import { sendMail } from "server/lib/mail";
 import { rateLimit } from "server/lib/ratelimit";
-import { getWorkspace } from "server/lib/spaces";
+import { getWorkspace, initWorkspace, lockSetup } from "server/lib/spaces";
+import { providerLogout, requireLocalLogin } from "server/lib/sso";
 import { findUserById, hashPassword, iso, toUser, verifyPassword, type UserRow } from "server/lib/users";
 import { EMAIL_RULE, NAME_RULE, PASSWORD_RULE, input, normalizeEmail } from "server/lib/validate";
 import { disconnectUser } from "server/realtime/hub";
@@ -17,6 +18,8 @@ const RESET_MINUTES = 30;
 
 const invalidCredentials = () => new HttpError(401, "invalid_credentials", "Invalid email or password");
 
+const PASSWORDS_OFF = "Passwords are turned off in this workspace: sign in with single sign-on";
+
 export const routes = [
   publicGet("/setup", async () => {
     const [row] = await sql`SELECT EXISTS (SELECT 1 FROM users) AS has_users`;
@@ -24,6 +27,7 @@ export const routes = [
   }),
 
   publicPost("/setup", async (ctx) => {
+    requireLocalLogin("This workspace uses single sign-on: the first person to sign in with it sets it up");
     rateLimit("setup", ctx.ip);
     const body = input(await readJson(ctx));
     const workspaceName = body.string("workspaceName", { max: 100 });
@@ -31,23 +35,13 @@ export const routes = [
     const email = normalizeEmail(body.string("email", EMAIL_RULE));
     const passwordHash = await hashPassword(body.string("password", PASSWORD_RULE));
     const user = await sql.begin(async (tx) => {
-      await tx`SELECT pg_advisory_xact_lock(4815162342)`;
+      await lockSetup(tx);
       const [existing] = await tx`SELECT EXISTS (SELECT 1 FROM users) AS has_users`;
       if (existing.has_users) throw forbidden("Setup has already been completed");
-      await tx`
-        INSERT INTO workspace (id, name) VALUES (1, ${workspaceName})
-        ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = now()`;
       const [owner] = await tx`
         INSERT INTO users (email, name, password_hash, role) VALUES (${email}, ${name}, ${passwordHash}, 'owner')
         RETURNING *`;
-      const [group] = await tx`
-        INSERT INTO groups (name, description, is_default, created_by)
-        VALUES ('Everyone', 'Every member of the workspace', true, ${owner.id}) RETURNING id`;
-      await tx`INSERT INTO group_members (group_id, user_id) VALUES (${group.id}, ${owner.id})`;
-      const [space] = await tx`
-        INSERT INTO spaces (name, slug, created_by) VALUES ('General', 'general', ${owner.id}) RETURNING id`;
-      await tx`INSERT INTO space_members (space_id, user_id, role, added_by) VALUES (${space.id}, ${owner.id}, 'admin', ${owner.id})`;
-      await tx`UPDATE workspace SET default_space_id = ${space.id} WHERE id = 1`;
+      await initWorkspace(tx, workspaceName, owner.id);
       return owner as UserRow;
     });
     await signIn(ctx, user.id);
@@ -55,11 +49,15 @@ export const routes = [
   }),
 
   publicPost("/auth/login", async (ctx) => {
+    requireLocalLogin(PASSWORDS_OFF);
     rateLimit("login", ctx.ip);
     const body = input(await readJson(ctx));
     const email = body.string("email", EMAIL_RULE).toLowerCase();
     const password = body.string("password", { max: 200, trim: false });
-    const [user] = await sql`SELECT * FROM users WHERE lower(email) = ${email}`;
+    // While single sign-on is on, an account linked to the provider signs in
+    // only through it, even with AUTH_LOCAL_LOGIN, so a person the provider
+    // disabled can't come back with a password: it is looked up as an unknown one.
+    const [user] = await sql`SELECT * FROM users WHERE lower(email) = ${email} AND (${!config.sso} OR auth_sub IS NULL)`;
     const valid = await verifyPassword(password, user?.password_hash ?? null);
     if (!user || !valid || user.deactivated_at) throw invalidCredentials();
     await signIn(ctx, user.id);
@@ -67,15 +65,20 @@ export const routes = [
   }),
 
   post("/auth/logout", async (ctx) => {
+    const { authSid, authRefreshToken } = ctx.session;
     await signOut(ctx);
-    return {};
+    return authSid ? providerLogout(authRefreshToken) : {};
   }),
 
   publicPost("/auth/forgot-password", async (ctx) => {
+    requireLocalLogin(PASSWORDS_OFF);
     rateLimit("forgot-password", ctx.ip);
     const body = input(await readJson(ctx));
     const email = body.string("email", EMAIL_RULE).toLowerCase();
-    const [user] = await sql`SELECT id, email, name FROM users WHERE lower(email) = ${email} AND deactivated_at IS NULL`;
+    // Nothing for an account linked to the provider while single sign-on is on, as at /auth/login.
+    const [user] = await sql`
+      SELECT id, email, name FROM users
+      WHERE lower(email) = ${email} AND deactivated_at IS NULL AND (${!config.sso} OR auth_sub IS NULL)`;
     if (user) {
       const value = token();
       await sql`DELETE FROM user_tokens WHERE user_id = ${user.id} AND purpose = ${RESET_PURPOSE}`;
@@ -99,14 +102,16 @@ export const routes = [
   }),
 
   publicPost("/auth/reset-password", async (ctx) => {
+    requireLocalLogin(PASSWORDS_OFF);
     rateLimit("reset-password", ctx.ip, 20);
     const body = input(await readJson(ctx));
     const value = body.string("token", { max: 200 });
     const passwordHash = await hashPassword(body.string("password", PASSWORD_RULE));
+    // While single sign-on is on, a link sent before the account was linked to the provider no longer works, as at /auth/login.
     const [row] = await sql`
       DELETE FROM user_tokens t USING users u
       WHERE t.token_hash = ${hashToken(value)} AND t.purpose = ${RESET_PURPOSE} AND t.expires_at > now()
-        AND u.id = t.user_id AND u.deactivated_at IS NULL
+        AND u.id = t.user_id AND u.deactivated_at IS NULL AND (${!config.sso} OR u.auth_sub IS NULL)
       RETURNING t.user_id`;
     if (!row) throw badRequest("This reset link is invalid or has expired");
     await sql`UPDATE users SET password_hash = ${passwordHash}, updated_at = now() WHERE id = ${row.user_id}`;
@@ -119,6 +124,7 @@ export const routes = [
   }),
 
   post("/auth/change-password", async (ctx) => {
+    requireLocalLogin(PASSWORDS_OFF);
     const body = input(await readJson(ctx));
     const current = body.string("currentPassword", { max: 200, trim: false });
     const next = body.string("newPassword", PASSWORD_RULE);

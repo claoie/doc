@@ -353,6 +353,10 @@ h1.page-title.static { margin: 4px 0 20px; }
 .auth-form .btn { height: 38px; margin-top: 4px; }
 .auth-links { margin-top: 16px; font-size: 14px; text-align: center; }
 .auth-note { color: var(--text-muted); }
+.auth-sso { display: flex; height: 38px; margin-top: 16px; }
+.auth-error { margin-top: 12px; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--text-muted); font-size: 13px; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 
 /* ---------- Public share ---------- */
 .share-layout { display: flex; min-height: 100vh; }

@@ -9,7 +9,9 @@ import { SettingsSection } from "./SettingsPage";
 const ROLE_LABEL: Record<WorkspaceRole, string> = { owner: "Owner", admin: "Admin", member: "Member" };
 
 export const MembersSettings = () => {
-  const { user, isAdmin } = useApp();
+  const { user, isAdmin, sso } = useApp();
+  // Doc's own invitations create password accounts: with single sign-on only, people come in through the identity provider.
+  const ssoOnly = sso.enabled && !sso.localLogin;
   const toast = useToast();
   const confirm = useConfirm();
   const [query, setQuery] = useState("");
@@ -46,10 +48,17 @@ export const MembersSettings = () => {
   };
 
   const canManage = (m: Member) => isAdmin && m.id !== user.id && !(m.role === "owner" && user.role !== "owner");
+  // The identity provider sets these members' role; whether they are active stays this workspace's.
+  const canChangeRole = (m: Member) => canManage(m) && !m.ssoManaged;
+  const count = `${total} ${total === 1 ? "person" : "people"} in this workspace.`;
 
   return (
     <>
-      <SettingsSection title="Members" description={`${total} ${total === 1 ? "person" : "people"} in this workspace.`} actions={isAdmin && <Button variant="primary" icon="plus" onClick={() => setInviting(true)}>Invite</Button>}>
+      <SettingsSection
+        title="Members"
+        description={ssoOnly && isAdmin ? `${count} People get access through your identity provider and appear here when they first sign in.` : count}
+        actions={isAdmin && !ssoOnly && <Button variant="primary" icon="plus" onClick={() => setInviting(true)}>Invite</Button>}
+      >
         <input className="input" placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} />
         {!members && <Spinner />}
         <div className="list">
@@ -62,14 +71,17 @@ export const MembersSettings = () => {
                 </div>
                 <div className="muted small">{m.email}</div>
               </div>
-              {canManage(m) ? (
+              {canChangeRole(m) ? (
                 <select className="input input-compact" value={m.role} onChange={(e) => act(() => api.changeRole(m.id, e.target.value as WorkspaceRole), "Role updated")}>
                   {user.role === "owner" && <option value="owner">Owner</option>}
                   <option value="admin">Admin</option>
                   <option value="member">Member</option>
                 </select>
               ) : (
-                <span className="muted">{ROLE_LABEL[m.role]}</span>
+                <span className="muted" title={m.ssoManaged ? "Role managed by your identity provider" : undefined}>
+                  {ROLE_LABEL[m.role]}
+                  {m.ssoManaged && " · SSO"}
+                </span>
               )}
               {canManage(m) && (
                 <MenuButton
@@ -108,21 +120,25 @@ export const MembersSettings = () => {
                 </div>
                 <MenuButton
                   items={[
-                    {
-                      label: "Copy invite link",
-                      icon: "link",
-                      onSelect: async () => {
-                        try {
-                          const { url } = await api.invitationLink(inv.id);
-                          if (await copyText(url)) toast("Invite link copied. Earlier links for this invite no longer work.");
-                          // The earlier link was just revoked, so the new one must reach the admin somehow.
-                          else window.prompt("Copy this invite link. Earlier links for this invite no longer work.", url);
-                        } catch (e) {
-                          toast(errorMessage(e), "error");
-                        }
-                      },
-                    },
-                    { label: "Resend email", icon: "refresh", onSelect: () => act(() => api.resendInvitation(inv.id), "Invitation sent") },
+                    ...(ssoOnly
+                      ? []
+                      : [
+                          {
+                            label: "Copy invite link",
+                            icon: "link" as const,
+                            onSelect: async () => {
+                              try {
+                                const { url } = await api.invitationLink(inv.id);
+                                if (await copyText(url)) toast("Invite link copied. Earlier links for this invite no longer work.");
+                                // The earlier link was just revoked, so the new one must reach the admin somehow.
+                                else window.prompt("Copy this invite link. Earlier links for this invite no longer work.", url);
+                              } catch (e) {
+                                toast(errorMessage(e), "error");
+                              }
+                            },
+                          },
+                          { label: "Resend email", icon: "refresh" as const, onSelect: () => act(() => api.resendInvitation(inv.id), "Invitation sent") },
+                        ]),
                     { label: "Revoke", icon: "x", danger: true, onSelect: () => act(() => api.revokeInvitation(inv.id), "Invitation revoked") },
                   ]}
                 >

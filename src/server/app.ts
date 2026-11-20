@@ -23,12 +23,14 @@ import { routes as pageRoutes } from "server/routes/pages";
 import { routes as searchRoutes } from "server/routes/search";
 import { routes as shareRoutes } from "server/routes/shares";
 import { routes as spaceRoutes } from "server/routes/spaces";
+import { routes as ssoRoutes } from "server/routes/sso";
 import { routes as watchRoutes } from "server/routes/watch";
 import { routes as workspaceRoutes } from "server/routes/workspace";
 
 const router = new Router([
   ...healthRoutes,
   ...authRoutes,
+  ...ssoRoutes,
   ...baseRoutes,
   ...meRoutes,
   ...workspaceRoutes,
@@ -79,9 +81,11 @@ const handleApi = async (req: Request, url: URL, server: Server<SocketData>): Pr
     userId = auth?.user.id ?? null;
     if (url.pathname === "/api/ws") {
       if (!auth) return fail(401, "unauthorized", "Sign in required");
-      return await upgrade(req, server, auth.user);
+      return await upgrade(req, server, auth.user, auth.session);
     }
-    if (req.method !== "GET" && req.method !== "HEAD" && !sameOrigin(req)) {
+    // The identity provider posts its events from its own server, each one signed.
+    const providerEvent = url.pathname === "/api/auth/events" && config.sso !== null;
+    if (req.method !== "GET" && req.method !== "HEAD" && !providerEvent && !sameOrigin(req)) {
       throw new HttpError(403, "forbidden_origin", "Cross-origin request rejected");
     }
     const match = router.match(req.method, url.pathname.slice("/api".length) || "/");

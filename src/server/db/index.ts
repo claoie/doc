@@ -4,6 +4,7 @@ import initial from "./migrations/001_initial.sql" with { type: "text" };
 import bases from "./migrations/002_bases.sql" with { type: "text" };
 import cellTimeZone from "./migrations/003_cell_time_zone.sql" with { type: "text" };
 import realtimeLeader from "./migrations/004_realtime_leader.sql" with { type: "text" };
+import sso from "./migrations/005_sso.sql" with { type: "text" };
 
 /** Embedded at build time so the bundled server carries its migrations. */
 export const migrations: { name: string; sql: string }[] = [
@@ -11,6 +12,7 @@ export const migrations: { name: string; sql: string }[] = [
   { name: "002_bases", sql: bases },
   { name: "003_cell_time_zone", sql: cellTimeZone },
   { name: "004_realtime_leader", sql: realtimeLeader },
+  { name: "005_sso", sql: sso },
 ];
 
 export let sql: SQL;

@@ -65,4 +65,26 @@ export const config = {
   get logRequests() {
     return env("LOG_REQUESTS") !== "0";
   },
+  /**
+   * Single sign-on through an OpenID Connect provider, or null when
+   * `AUTH_ISSUER` is unset. Checked at start by `ssoProblems` (lib/sso.ts).
+   */
+  get sso() {
+    const issuer = env("AUTH_ISSUER");
+    if (!issuer) return null;
+    return {
+      issuer,
+      clientId: env("AUTH_CLIENT_ID"),
+      clientSecret: env("AUTH_CLIENT_SECRET"),
+      redirectUri: env("AUTH_REDIRECT_URI") ?? `${this.appUrl}/api/auth/callback`,
+      backChannelUrl: env("AUTH_BACKCHANNEL_URL"),
+      audience: env("AUTH_AUDIENCE"),
+      localLogin: boolEnv("AUTH_LOCAL_LOGIN"),
+      linkUsers: env("AUTH_LINK_USERS"),
+    };
+  },
+  /** Password sign-in, setup, invitations and resets: always without SSO, and with it only when `AUTH_LOCAL_LOGIN` is on. */
+  get localLogin() {
+    return this.sso?.localLogin ?? true;
+  },
 };

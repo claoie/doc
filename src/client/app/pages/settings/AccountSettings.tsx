@@ -6,7 +6,15 @@ import { Avatar, Button, Field, Input, Spinner, errorMessage, timeAgo, useToast 
 import { SettingsSection } from "./SettingsPage";
 
 export const AccountSettings = () => {
-  const { user, setUser } = useApp();
+  const { user, setUser, sso } = useApp();
+  // The identity provider keeps a linked person's name, and their email when it
+  // verified one; with single sign-on as the only way in there is no password
+  // to change either.
+  const nameManaged = sso.enabled && user.ssoManaged === true;
+  const emailManaged = nameManaged && user.ssoManagedEmail === true;
+  // Someone single sign-on created has no password to confirm an email change with.
+  const emailNeedsPassword = !(sso.enabled && user.hasPassword === false);
+  const passwordsOff = sso.enabled && !sso.localLogin;
   const toast = useToast();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
@@ -29,7 +37,9 @@ export const AccountSettings = () => {
     setBusy("profile");
     try {
       const body: Parameters<typeof api.updateMe>[0] = { name: name.trim() };
-      if (email.trim() !== user.email) Object.assign(body, { email: email.trim(), currentPassword: emailPassword });
+      if (email.trim() !== user.email) {
+        Object.assign(body, { email: email.trim(), ...(emailNeedsPassword ? { currentPassword: emailPassword } : {}) });
+      }
       const { user: next } = await api.updateMe(body);
       setUser(next);
       setEmailPassword("");
@@ -100,43 +110,47 @@ export const AccountSettings = () => {
           </div>
         </div>
         <form className="form" onSubmit={saveProfile}>
-          <Field label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} />
+          <Field label="Name" hint={nameManaged ? "Your name comes from your identity provider." : undefined}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} disabled={nameManaged} />
           </Field>
-          <Field label="Email">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Field label="Email" hint={emailManaged ? "Your email comes from your identity provider." : undefined}>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={emailManaged} />
           </Field>
-          {email.trim() !== user.email && (
+          {email.trim() !== user.email && emailNeedsPassword && (
             <Field label="Current password" hint="Required to change your email">
               <Input type="password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required autoComplete="current-password" />
             </Field>
           )}
-          <div>
-            <Button variant="primary" type="submit" loading={busy === "profile"}>
-              Save profile
-            </Button>
-          </div>
+          {!(nameManaged && emailManaged) && (
+            <div>
+              <Button variant="primary" type="submit" loading={busy === "profile"}>
+                Save profile
+              </Button>
+            </div>
+          )}
         </form>
       </SettingsSection>
 
-      <SettingsSection title="Password">
-        <form className="form" onSubmit={changePassword}>
-          <Field label="Current password">
-            <Input type="password" value={passwords.current} onChange={(e) => setPasswords((p) => ({ ...p, current: e.target.value }))} required autoComplete="current-password" />
-          </Field>
-          <Field label="New password" hint="At least 8 characters">
-            <Input type="password" value={passwords.next} onChange={(e) => setPasswords((p) => ({ ...p, next: e.target.value }))} required minLength={8} maxLength={70} autoComplete="new-password" />
-          </Field>
-          <Field label="Confirm new password">
-            <Input type="password" value={passwords.confirm} onChange={(e) => setPasswords((p) => ({ ...p, confirm: e.target.value }))} required autoComplete="new-password" />
-          </Field>
-          <div>
-            <Button variant="primary" type="submit" loading={busy === "password"}>
-              Change password
-            </Button>
-          </div>
-        </form>
-      </SettingsSection>
+      {!passwordsOff && (
+        <SettingsSection title="Password">
+          <form className="form" onSubmit={changePassword}>
+            <Field label="Current password">
+              <Input type="password" value={passwords.current} onChange={(e) => setPasswords((p) => ({ ...p, current: e.target.value }))} required autoComplete="current-password" />
+            </Field>
+            <Field label="New password" hint="At least 8 characters">
+              <Input type="password" value={passwords.next} onChange={(e) => setPasswords((p) => ({ ...p, next: e.target.value }))} required minLength={8} maxLength={70} autoComplete="new-password" />
+            </Field>
+            <Field label="Confirm new password">
+              <Input type="password" value={passwords.confirm} onChange={(e) => setPasswords((p) => ({ ...p, confirm: e.target.value }))} required autoComplete="new-password" />
+            </Field>
+            <div>
+              <Button variant="primary" type="submit" loading={busy === "password"}>
+                Change password
+              </Button>
+            </div>
+          </form>
+        </SettingsSection>
+      )}
 
       <SettingsSection title="Sessions" description="Devices currently signed in to your account.">
         {!sessions && <Spinner />}

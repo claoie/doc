@@ -1,4 +1,5 @@
 import type { Member, User, UserPreferences, UserRef, WorkspaceRole } from "common/api-types";
+import { config } from "server/config";
 import { sql } from "server/db";
 
 export interface UserRow {
@@ -13,6 +14,12 @@ export interface UserRow {
   created_at: Date;
   last_login_at: Date | null;
   deactivated_at: Date | null;
+  /** The identity provider's subject, once the user has signed in with single sign-on. */
+  auth_sub: string | null;
+  /** The email is the one the identity provider verified at the last sign-in, so the provider manages it. */
+  email_from_provider: boolean;
+  /** On rows read whole; null for people single sign-on created. Never sent to a browser. */
+  password_hash?: string | null;
 }
 
 export const iso = (value: Date | string | null | undefined): string | null =>
@@ -32,6 +39,21 @@ export const toUser = (row: UserRow, viewerId?: string): User => ({
   createdAt: iso(row.created_at)!,
   lastLoginAt: iso(row.last_login_at),
 });
+
+/** `ssoManaged` and `ssoManagedEmail`, while single sign-on is on; nothing otherwise, so answers without it are unchanged. */
+export const ssoManagedField = (
+  row: Pick<UserRow, "auth_sub" | "email_from_provider">,
+): Pick<User, "ssoManaged" | "ssoManagedEmail"> =>
+  config.sso ? { ssoManaged: row.auth_sub !== null, ssoManagedEmail: row.auth_sub !== null && row.email_from_provider } : {};
+
+/**
+ * For the current user only: `ssoManagedField`, and whether they have a
+ * password here, while single sign-on is on. Never in the member list.
+ */
+export const ownSsoFields = (
+  row: Pick<UserRow, "auth_sub" | "email_from_provider" | "password_hash">,
+): Pick<User, "ssoManaged" | "ssoManagedEmail" | "hasPassword"> =>
+  config.sso ? { ...ssoManagedField(row), hasPassword: row.password_hash != null } : {};
 
 export const toMember = (row: UserRow, viewerId: string): Member => ({
   ...toUser(row, viewerId),

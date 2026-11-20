@@ -2,9 +2,9 @@ import type { Server, WebSocketHandler } from "bun";
 import { config } from "server/config";
 import { fail } from "server/lib/http";
 import { listReadableSpaceIds } from "server/lib/permissions";
-import type { AuthUser } from "server/lib/auth";
+import { liveSessions, type AuthSession, type AuthUser } from "server/lib/auth";
 import { log } from "server/lib/logger";
-import { onMembershipChange, registry, type Socket, type SocketData } from "./hub";
+import { SIGNED_OUT, onMembershipChange, registry, type Socket, type SocketData } from "./hub";
 import { disconnect, flushAll, joinPage, leavePage, receiveSteps, refreshOpenSessions, updatePresence } from "./collab";
 import { isLeader, onLeadLost, releaseLease, stopLeading } from "./leader";
 
@@ -13,6 +13,8 @@ const MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
 const MAX_MESSAGES_PER_SECOND = 60;
 /** "Try again later": clients reconnect, which reaches the leader within a try or two. */
 const NOT_LEADER = 1013;
+/** How often the leader checks that every open socket's session is still signed in. */
+const SESSION_CHECK_MS = 60_000;
 
 const allowedOrigin = (request: Request): boolean => {
   const origin = request.headers.get("origin");
@@ -27,11 +29,12 @@ const allowedOrigin = (request: Request): boolean => {
 };
 
 /** Upgrades an authenticated request to a realtime socket subscribed to the user's spaces. */
-export const upgrade = async (request: Request, server: Server<SocketData>, user: AuthUser) => {
+export const upgrade = async (request: Request, server: Server<SocketData>, user: AuthUser, session: AuthSession) => {
   if (!allowedOrigin(request)) return fail(403, "forbidden_origin", "Origin not allowed");
   const spaces = await listReadableSpaceIds(user.id);
   const data: SocketData = {
     connectionId: crypto.randomUUID(),
+    sessionId: session.id,
     userId: user.id,
     userName: user.name,
     spaces: new Set(spaces),
@@ -134,11 +137,37 @@ export const websocket: WebSocketHandler<SocketData> = {
 };
 
 /**
+ * A socket never looks at its session again after it opens, and what ends a
+ * session (signing out, deactivation, an identity provider's event) may happen
+ * on another copy of the server. So the leader checks every open socket's
+ * session at once, and closes the sockets whose session is no longer signed
+ * in, as `disconnectUser` does.
+ */
+export const checkSocketSessions = async () => {
+  if (!isLeader()) return;
+  const sockets = registry.allSockets();
+  if (sockets.length === 0) return;
+  const live = await liveSessions([...new Set(sockets.map((ws) => ws.data.sessionId))]);
+  for (const ws of sockets) if (!live.has(ws.data.sessionId)) ws.close(SIGNED_OUT, "signed out");
+};
+
+let sessionChecks: ReturnType<typeof setInterval> | null = null;
+
+export const startSessionChecks = () => {
+  sessionChecks ??= setInterval(() => {
+    checkSocketSessions().catch((error) => log.error("checking socket sessions failed", error));
+  }, SESSION_CHECK_MS);
+  sessionChecks.unref();
+};
+
+/**
  * Called on shutdown before the database closes. Sockets go first so nothing
  * is accepted after the last save: clients resend what wasn't confirmed. The
  * lease goes last so a successor only loads documents once they are saved.
  */
 export const shutdownRealtime = async () => {
+  if (sessionChecks) clearInterval(sessionChecks);
+  sessionChecks = null;
   stopLeading();
   for (const ws of registry.allSockets()) ws.close(1001, "server shutting down");
   await flushAll().catch((error) => log.error("flushing documents on shutdown failed", error));

@@ -1,3 +1,4 @@
+import type { SQL } from "bun";
 import type { Space, Workspace } from "common/api-types";
 import { isUuid } from "common/ids";
 import { sql } from "server/db";
@@ -60,4 +61,26 @@ export const getWorkspace = async (): Promise<Workspace> => {
     defaultSpaceId: row?.default_space_id ?? null,
     createdAt: iso(row?.created_at ?? new Date())!,
   };
+};
+
+/** Serializes first-run setup until the transaction ends, so a workspace is set up once even when two first sign-ins race. */
+export const lockSetup = (tx: SQL) => tx`SELECT pg_advisory_xact_lock(4815162342)`;
+
+/**
+ * First-run setup for the workspace's first user, inside the transaction that
+ * created them: names the workspace, creates the default group `Everyone` and
+ * a `General` space with that user as its admin.
+ */
+export const initWorkspace = async (tx: SQL, workspaceName: string, userId: string) => {
+  await tx`
+    INSERT INTO workspace (id, name) VALUES (1, ${workspaceName})
+    ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = now()`;
+  const [group] = await tx`
+    INSERT INTO groups (name, description, is_default, created_by)
+    VALUES ('Everyone', 'Every member of the workspace', true, ${userId}) RETURNING id`;
+  await tx`INSERT INTO group_members (group_id, user_id) VALUES (${group.id}, ${userId})`;
+  const [space] = await tx`
+    INSERT INTO spaces (name, slug, created_by) VALUES ('General', 'general', ${userId}) RETURNING id`;
+  await tx`INSERT INTO space_members (space_id, user_id, role, added_by) VALUES (${space.id}, ${userId}, 'admin', ${userId})`;
+  await tx`UPDATE workspace SET default_space_id = ${space.id} WHERE id = 1`;
 };

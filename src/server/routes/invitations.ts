@@ -9,6 +9,7 @@ import { sendMail } from "server/lib/mail";
 import { requireWorkspaceAdmin } from "server/lib/permissions";
 import { rateLimit } from "server/lib/ratelimit";
 import { getWorkspace } from "server/lib/spaces";
+import { requireLocalLogin } from "server/lib/sso";
 import { hashPassword, iso, toUser, type UserRow } from "server/lib/users";
 import { Input, NAME_RULE, PASSWORD_RULE, input, normalizeEmail } from "server/lib/validate";
 
@@ -26,6 +27,9 @@ const invitationMail = async (email: string, url: string, inviterName: string) =
     }),
   );
 };
+
+/** Invitations create password accounts; with single sign-on only, people get access through the identity provider instead. */
+const INVITATIONS_OFF = "This workspace uses single sign-on: people get access through the identity provider and appear here when they first sign in";
 
 const invalidInvitation = () => new HttpError(400, "invalid_invitation", "This invitation is invalid, expired or has been revoked");
 
@@ -70,6 +74,7 @@ export const routes = [
 
   post("/invitations", async (ctx) => {
     requireWorkspaceAdmin(ctx.user);
+    requireLocalLogin(INVITATIONS_OFF);
     const body = input(await readJson(ctx));
     const emails = [...new Set((body.strings("emails", 50, { max: 254 }) ?? []).map(normalizeEmail))];
     if (emails.length === 0) throw badRequest("emails is required");
@@ -104,6 +109,7 @@ export const routes = [
 
   post("/invitations/resend", async (ctx) => {
     requireWorkspaceAdmin(ctx.user);
+    requireLocalLogin(INVITATIONS_OFF);
     const { url, email } = await rotate(input(await readJson(ctx)).uuid("id"));
     await invitationMail(email, url, ctx.user.name);
     return { url };
@@ -111,6 +117,7 @@ export const routes = [
 
   post("/invitations/link", async (ctx) => {
     requireWorkspaceAdmin(ctx.user);
+    requireLocalLogin(INVITATIONS_OFF);
     const { url } = await rotate(input(await readJson(ctx)).uuid("id"));
     return { url };
   }),
@@ -122,6 +129,7 @@ export const routes = [
   }),
 
   publicGet("/invitations/:id", async (ctx) => {
+    requireLocalLogin(INVITATIONS_OFF);
     rateLimit("invitation-info", ctx.ip, 30);
     const invitation = await verifyInvitation(ctx.params.id, Input.query(ctx.url).raw("token"));
     const workspace = await getWorkspace();
@@ -129,6 +137,7 @@ export const routes = [
   }),
 
   publicPost("/invitations/accept", async (ctx) => {
+    requireLocalLogin(INVITATIONS_OFF);
     rateLimit("invitation-accept", ctx.ip);
     const body = input(await readJson(ctx));
     const invitation = await verifyInvitation(body.raw("id"), body.raw("token"));

@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Favorites, Space, User, Workspace, TreeItem } from "common/api-types";
+import type { AuthConfig, Favorites, Space, User, Workspace, TreeItem } from "common/api-types";
 import { api } from "./api";
 import { realtime } from "./realtime";
 
 interface AppState {
+  /** How people sign in to this workspace. */
+  sso: AuthConfig["sso"];
   user: User;
   workspace: Workspace;
   spaces: Space[];
@@ -39,7 +41,7 @@ export const AppProvider = ({
   initial,
   children,
 }: {
-  initial: { user: User; workspace: Workspace; spaces: Space[] };
+  initial: { user: User; workspace: Workspace; spaces: Space[]; sso: AuthConfig["sso"] };
   children: ReactNode;
 }) => {
   const [user, setUser] = useState(initial.user);
@@ -96,6 +98,7 @@ export const AppProvider = ({
 
   const value = useMemo(
     () => ({
+      sso: initial.sso,
       user,
       workspace,
       spaces,
@@ -110,7 +113,7 @@ export const AppProvider = ({
       searchOpen,
       setSearchOpen,
     }),
-    [user, workspace, spaces, favorites, refreshSpaces, refreshFavorites, sidebarOpen, setSidebarOpen, searchOpen],
+    [initial.sso, user, workspace, spaces, favorites, refreshSpaces, refreshFavorites, sidebarOpen, setSidebarOpen, searchOpen],
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

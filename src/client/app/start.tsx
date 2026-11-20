@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { useCallback, useEffect, useState } from "react";
-import type { Space, User, Workspace } from "common/api-types";
+import type { AuthConfig, Space, User, Workspace } from "common/api-types";
 import { api, ApiError, setUnauthorizedHandler } from "./api";
 import { match, navigate, useLocation } from "./router";
 import { AppProvider, applyTheme } from "./store";
@@ -13,7 +13,11 @@ import "../styles/editor.css";
 import "../styles/app.css";
 import "../styles/bases.css";
 
-type Session = { user: User; workspace: Workspace; spaces: Space[] };
+type Sso = AuthConfig["sso"];
+type Session = { user: User; workspace: Workspace; spaces: Space[]; sso: Sso };
+
+/** What a server without single sign-on answers, and the fallback when the question fails. */
+const PASSWORDS_ONLY: Sso = { enabled: false, localLogin: true };
 
 const PUBLIC_AUTH = ["/login", "/setup", "/forgot-password", "/reset-password", "/invites/:id"];
 
@@ -21,12 +25,20 @@ const Root = () => {
   const location = useLocation();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [sso, setSso] = useState<Sso>(PASSWORDS_ONLY);
   const [bootError, setBootError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const { needsSetup } = await api.setupStatus();
+      const [{ needsSetup }, mode] = await Promise.all([
+        api.setupStatus(),
+        api
+          .authConfig()
+          .then((c) => c.sso)
+          .catch(() => PASSWORDS_ONLY),
+      ]);
       setNeedsSetup(needsSetup);
+      setSso(mode);
       if (needsSetup) {
         setSession(null);
         return;
@@ -34,7 +46,7 @@ const Root = () => {
       const me = await api.me();
       const spaces = await api.spaces();
       applyTheme(me.user.preferences.theme);
-      setSession({ ...me, spaces });
+      setSession({ ...me, spaces, sso: mode });
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setSession(null);
       else setBootError(e instanceof Error ? e.message : "Failed to load");
@@ -74,17 +86,17 @@ const Root = () => {
   };
 
   const authRoute = PUBLIC_AUTH.find((p) => match(p, location.pathname));
-  if (needsSetup) return <AuthPage mode="setup" onAuthed={onAuthed} />;
+  if (needsSetup) return <AuthPage mode="setup" sso={sso} onAuthed={onAuthed} />;
   if (!session) {
     if (authRoute && authRoute !== "/setup") {
       const mode = authRoute === "/invites/:id" ? "invite" : (authRoute.slice(1) as "login" | "forgot-password" | "reset-password");
-      return <AuthPage mode={mode} onAuthed={onAuthed} />;
+      return <AuthPage mode={mode} sso={sso} onAuthed={onAuthed} />;
     }
     if (location.pathname !== "/login") {
       const next = location.pathname === "/" ? "" : `?next=${encodeURIComponent(location.href)}`;
       return <Redirect to={`/login${next}`} />;
     }
-    return <AuthPage mode="login" onAuthed={onAuthed} />;
+    return <AuthPage mode="login" sso={sso} onAuthed={onAuthed} />;
   }
   if (authRoute && authRoute !== "/invites/:id" && authRoute !== "/reset-password") return <Redirect to="/" />;
   return (

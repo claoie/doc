@@ -1,10 +1,30 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import type { PublicWorkspace } from "common/api-types";
+import type { AuthConfig, PublicWorkspace } from "common/api-types";
 import { api } from "../api";
 import { Link, useLocation } from "../router";
 import { Button, Field, Input, errorMessage } from "../components/ui";
 
 type Mode = "login" | "setup" | "forgot-password" | "reset-password" | "invite";
+
+/** Why the server sent the browser back from single sign-on (`/login?sso_error=…`). */
+const SSO_ERRORS: Record<string, string> = {
+  access_denied: "Single sign-on was cancelled or access was denied.",
+  unavailable: "The identity provider could not be reached. Try again in a moment.",
+  no_email: "Your single sign-on account has no email address. Ask an administrator to add one.",
+  account_exists: "An account with your email address already exists here, linked to another single sign-on account. Ask an administrator.",
+  deactivated: "Your account in this workspace is deactivated. Ask a workspace admin to reactivate it.",
+  rate_limited: "Too many sign-in attempts. Try again in a minute.",
+};
+
+/** A full-page navigation to the server, which sends the browser on to the identity provider. */
+const SsoButton = ({ next }: { next: string | null }) => {
+  const returnTo = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  return (
+    <a className="btn btn-primary auth-sso" href={`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`}>
+      Sign in with SSO
+    </a>
+  );
+};
 
 const AuthShell = ({ title, subtitle, children, workspace }: { title: string; subtitle?: ReactNode; children: ReactNode; workspace?: PublicWorkspace | null }) => (
   <div className="auth-screen">
@@ -17,8 +37,12 @@ const AuthShell = ({ title, subtitle, children, workspace }: { title: string; su
   </div>
 );
 
-export const AuthPage = ({ mode, onAuthed }: { mode: Mode; onAuthed: () => Promise<void> }) => {
+export const AuthPage = ({ mode: requested, sso, onAuthed }: { mode: Mode; sso: AuthConfig["sso"]; onAuthed: () => Promise<void> }) => {
   const location = useLocation();
+  // With single sign-on as the only way in, there are no passwords to set or reset, and no invitations to accept.
+  const ssoOnly = sso.enabled && !sso.localLogin;
+  const mode: Mode = ssoOnly ? "login" : requested;
+  const ssoError = location.search.get("sso_error");
   const [workspace, setWorkspace] = useState<PublicWorkspace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,6 +103,12 @@ export const AuthPage = ({ mode, onAuthed }: { mode: Mode; onAuthed: () => Promi
   if (mode === "setup") {
     return (
       <AuthShell title="Set up your workspace" subtitle="Create the owner account to get started.">
+        {sso.enabled && (
+          <>
+            <SsoButton next={null} />
+            <div className="auth-divider">or</div>
+          </>
+        )}
         <form className="auth-form" onSubmit={submit}>
           <Field label="Workspace name">
             <Input value={form.workspaceName} onChange={set("workspaceName")} placeholder="My workspace" autoFocus />
@@ -167,22 +197,37 @@ export const AuthPage = ({ mode, onAuthed }: { mode: Mode; onAuthed: () => Promi
   }
 
   return (
-    <AuthShell title={workspace ? `Sign in to ${workspace.name}` : "Sign in"} workspace={workspace}>
-      <form className="auth-form" onSubmit={submit}>
-        <Field label="Email">
-          <Input type="email" value={form.email} onChange={set("email")} required autoFocus autoComplete="email" />
-        </Field>
-        <Field label="Password">
-          <Input type="password" value={form.password} onChange={set("password")} required autoComplete="current-password" />
-        </Field>
-        {error && <div className="form-error">{error}</div>}
-        <Button variant="primary" type="submit" loading={busy}>
-          Sign in
-        </Button>
-      </form>
-      <div className="auth-links">
-        <Link to="/forgot-password">Forgot password?</Link>
-      </div>
+    <AuthShell
+      title={workspace?.name ? `Sign in to ${workspace.name}` : "Sign in"}
+      subtitle={ssoOnly && requested === "setup" ? "The first person to sign in sets up the workspace." : undefined}
+      workspace={workspace}
+    >
+      {sso.enabled && (
+        <>
+          {ssoError && <div className="form-error auth-error">{SSO_ERRORS[ssoError] ?? "Single sign-on didn't complete. Try again."}</div>}
+          <SsoButton next={location.search.get("next")} />
+        </>
+      )}
+      {sso.localLogin && (
+        <>
+          {sso.enabled && <div className="auth-divider">or</div>}
+          <form className="auth-form" onSubmit={submit}>
+            <Field label="Email">
+              <Input type="email" value={form.email} onChange={set("email")} required autoFocus={!sso.enabled} autoComplete="email" />
+            </Field>
+            <Field label="Password">
+              <Input type="password" value={form.password} onChange={set("password")} required autoComplete="current-password" />
+            </Field>
+            {error && <div className="form-error">{error}</div>}
+            <Button variant={sso.enabled ? "default" : "primary"} type="submit" loading={busy}>
+              Sign in
+            </Button>
+          </form>
+          <div className="auth-links">
+            <Link to="/forgot-password">Forgot password?</Link>
+          </div>
+        </>
+      )}
     </AuthShell>
   );
 };
