@@ -58,6 +58,62 @@ jobs:
       - name: Build
         run: bun run build
 
+  # The API suite (src/api-tests) starts the server under test as a process of
+  # its own and talks to it over HTTP and WebSocket only, so the same tests run
+  # against the Bun server and against the Rust server (src/server-rs).
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [bun, rust]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: doc
+          POSTGRES_PASSWORD: doc
+          POSTGRES_DB: doc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U doc -d doc_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://doc:doc@localhost:5432/doc_test
+      API_TEST_SERVER: ${{ matrix.server }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # The toolchain is pinned (rust-toolchain.toml): the port matches the Bun
+      # server only with that standard library's Unicode tables.
+      - name: Install the pinned Rust toolchain
+        if: matrix.server == 'rust'
+        run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" --profile minimal
+
+      # The Rust server's own tests compare its ports of src/common with
+      # fixtures generated from the TypeScript (src/server-rs/tests/fixtures).
+      - name: Test the Rust crate
+        if: matrix.server == 'rust'
+        run: cargo test --locked -p doc-server
+
+      - name: Build the Rust server
+        if: matrix.server == 'rust'
+        run: cargo build --release --locked -p doc-server
+
+      - name: API suite
+        run: bun test src/api-tests
+
   # Builds the production image and runs it against Postgres until its health
   # check passes, so a broken image fails the PR instead of the deploy.
   image:
@@ -83,6 +139,39 @@ jobs:
           for i in $(seq 1 60); do docker exec pg pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1 && break; sleep 1; done
           docker run -d --name app --network ci --memory=128m -e APP_URL=http://localhost:3000 \
             -e DATABASE_URL="postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@pg:5432/$POSTGRES_DB" doc:ci
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' app)
+            if [ "$status" = healthy ]; then echo "healthy after ${i}s"; exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' app)" != true ]; then break; fi
+            sleep 1
+          done
+          docker logs app
+          exit 1
+
+  # The same check for the image with the Rust server.
+  image-rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --file Dockerfile.rust --tag doc-rust:ci .
+
+      - name: Run image
+        env:
+          POSTGRES_USER: doc
+          POSTGRES_PASSWORD: doc
+          POSTGRES_DB: doc
+        run: |
+          docker network create ci
+          docker run -d --name pg --network ci -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:16-alpine
+          # During first start Postgres answers on its socket before it listens on TCP.
+          for i in $(seq 1 60); do docker exec pg pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1 && break; sleep 1; done
+          docker run -d --name app --network ci --memory=128m -e APP_URL=http://localhost:3000 \
+            -e DATABASE_URL="postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@pg:5432/$POSTGRES_DB" doc-rust:ci
           for i in $(seq 1 60); do
             status=$(docker inspect --format '{{.State.Health.Status}}' app)
             if [ "$status" = healthy ]; then echo "healthy after ${i}s"; exit 0; fi

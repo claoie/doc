@@ -1,0 +1,49 @@
+# The same app with the Rust server (src/server-rs) in place of the Bun one.
+# The web client is built exactly as in ./Dockerfile.
+
+FROM oven/bun:1.4.4 AS client
+
+WORKDIR /app
+
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+COPY tsconfig.json vite.config.ts ./
+COPY src src
+
+RUN bun run build-client
+
+# The version rust-toolchain.toml pins: the server depends on its Unicode tables.
+FROM rust:1.97.0-slim-bookworm AS server
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY src/server-rs src/server-rs
+# The migrations are compiled into the binary from the Bun server's directory.
+COPY src/server/db/migrations src/server/db/migrations
+
+RUN cargo build --release --locked -p doc-server
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+RUN useradd --system --uid 1000 --create-home doc && mkdir -p /app/data && chown doc:doc /app/data
+
+# The server serves the client that lies next to it: build/server and build/client.
+COPY --from=server /app/target/release/doc-server ./build/server/doc-server
+COPY --from=client /app/build/client ./build/client
+
+USER doc
+
+ENV PORT=3000 \
+    STORAGE_PATH=/app/data/storage
+
+EXPOSE 3000
+VOLUME ["/app/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD ["/app/build/server/doc-server", "health"]
+
+CMD ["/app/build/server/doc-server"]

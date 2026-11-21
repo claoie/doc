@@ -27,8 +27,8 @@ export default [
     },
   },
   {
-    files: ["src/**/*.test.ts", "src/server/test-helpers.ts"],
+    files: ["src/**/*.test.ts", "src/server/test-helpers.ts", "src/api-tests/**/*.ts"],
     rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
-  { ignores: ["build/**", "node_modules/**", "coverage/**", "data/**"] },
+  { ignores: ["build/**", "node_modules/**", "coverage/**", "data/**", "target/**"] },
 ];

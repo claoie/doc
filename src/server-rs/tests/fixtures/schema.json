@@ -1,0 +1,1146 @@
+{
+ "nodes": [
+  {
+   "name": "doc",
+   "spec": {
+    "content": "block+ footnotes?"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "pageBreak",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "transclusionSource",
+    "transclusionReference",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages",
+    "base"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "paragraph",
+   "spec": {
+    "group": "block",
+    "content": "inline*",
+    "attrs": {
+     "id": null,
+     "textAlign": null,
+     "indent": 0
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": true,
+   "allowedMarks": [
+    "link",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "code",
+    "highlight",
+    "textStyle",
+    "subscript",
+    "superscript",
+    "comment"
+   ],
+   "validChildren": [
+    "hardBreak",
+    "text",
+    "mathInline",
+    "mention",
+    "status",
+    "footnoteReference"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "heading",
+   "spec": {
+    "group": "block",
+    "content": "inline*",
+    "attrs": {
+     "id": null,
+     "level": 1,
+     "textAlign": null,
+     "indent": 0
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": true,
+   "allowedMarks": [
+    "link",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "code",
+    "highlight",
+    "textStyle",
+    "subscript",
+    "superscript",
+    "comment"
+   ],
+   "validChildren": [
+    "hardBreak",
+    "text",
+    "mathInline",
+    "mention",
+    "status",
+    "footnoteReference"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "blockquote",
+   "spec": {
+    "group": "block",
+    "content": "block+"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "pageBreak",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "transclusionSource",
+    "transclusionReference",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages",
+    "base"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "bulletList",
+   "spec": {
+    "group": "block list",
+    "content": "listItem+"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "listItem"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "orderedList",
+   "spec": {
+    "group": "block list",
+    "content": "listItem+",
+    "attrs": {
+     "start": 1,
+     "type": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "listItem"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "listItem",
+   "spec": {
+    "content": "paragraph block*"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "taskList",
+   "spec": {
+    "group": "block list",
+    "content": "taskItem+"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "taskItem"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "taskItem",
+   "spec": {
+    "content": "paragraph block*",
+    "attrs": {
+     "checked": false
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "codeBlock",
+   "spec": {
+    "group": "block",
+    "content": "text*",
+    "marks": "",
+    "code": true,
+    "isolating": true,
+    "attrs": {
+     "language": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": true,
+   "allowedMarks": [],
+   "validChildren": [
+    "text"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "horizontalRule",
+   "spec": {
+    "group": "block",
+    "selectable": true
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "pageBreak",
+   "spec": {
+    "group": "block",
+    "selectable": true
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "hardBreak",
+   "spec": {
+    "group": "inline",
+    "inline": true
+   },
+   "isLeaf": true,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "text",
+   "spec": {
+    "group": "inline"
+   },
+   "isLeaf": false,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "image",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "width": null,
+     "height": null,
+     "align": "center",
+     "alt": null,
+     "attachmentId": null,
+     "size": null,
+     "aspectRatio": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "video",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "alt": null,
+     "attachmentId": null,
+     "width": null,
+     "height": null,
+     "size": null,
+     "align": "center",
+     "aspectRatio": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "audio",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "attachmentId": null,
+     "size": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "attachment",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "url": "",
+     "name": null,
+     "mime": null,
+     "size": null,
+     "attachmentId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "pdf",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "name": null,
+     "attachmentId": null,
+     "size": null,
+     "width": 800,
+     "height": 600
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "drawio",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "title": null,
+     "alt": null,
+     "width": null,
+     "height": null,
+     "size": null,
+     "aspectRatio": null,
+     "align": "center",
+     "attachmentId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "excalidraw",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "title": null,
+     "alt": null,
+     "width": null,
+     "height": null,
+     "size": null,
+     "aspectRatio": null,
+     "align": "center",
+     "attachmentId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "table",
+   "spec": {
+    "group": "block",
+    "content": "tableRow+",
+    "isolating": true
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "tableRow"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "tableRow",
+   "spec": {
+    "content": "(tableCell | tableHeader)*"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "tableCell",
+    "tableHeader"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "tableCell",
+   "spec": {
+    "content": "(paragraph | heading | bulletList | orderedList | taskList | blockquote | callout | image | video | audio | subpages | attachment | mathBlock | details | codeBlock)+",
+    "isolating": true,
+    "attrs": {
+     "colspan": 1,
+     "rowspan": 1,
+     "colwidth": null,
+     "backgroundColor": null,
+     "backgroundColorName": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "callout",
+    "details",
+    "mathBlock",
+    "subpages"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "tableHeader",
+   "spec": {
+    "content": "(paragraph | heading | bulletList | orderedList | taskList | blockquote | callout | image | video | audio | subpages | attachment | mathBlock | details | codeBlock)+",
+    "isolating": true,
+    "attrs": {
+     "colspan": 1,
+     "rowspan": 1,
+     "colwidth": null,
+     "backgroundColor": null,
+     "backgroundColorName": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "callout",
+    "details",
+    "mathBlock",
+    "subpages"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "callout",
+   "spec": {
+    "group": "block",
+    "content": "block+",
+    "isolating": true,
+    "attrs": {
+     "type": "info",
+     "icon": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "pageBreak",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "transclusionSource",
+    "transclusionReference",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages",
+    "base"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "details",
+   "spec": {
+    "group": "block",
+    "content": "detailsSummary detailsContent",
+    "isolating": true,
+    "attrs": {
+     "open": false
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": false
+  },
+  {
+   "name": "detailsSummary",
+   "spec": {
+    "content": "inline*",
+    "isolating": true
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": true,
+   "allowedMarks": [
+    "link",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "code",
+    "highlight",
+    "textStyle",
+    "subscript",
+    "superscript",
+    "comment"
+   ],
+   "validChildren": [
+    "hardBreak",
+    "text",
+    "mathInline",
+    "mention",
+    "status",
+    "footnoteReference"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "detailsContent",
+   "spec": {
+    "content": "block*"
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "pageBreak",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "transclusionSource",
+    "transclusionReference",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages",
+    "base"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "columns",
+   "spec": {
+    "group": "block",
+    "content": "column+",
+    "isolating": true,
+    "attrs": {
+     "layout": "two_equal",
+     "widthMode": "normal"
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "column"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "column",
+   "spec": {
+    "content": "block+",
+    "isolating": true,
+    "attrs": {
+     "width": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "pageBreak",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "transclusionSource",
+    "transclusionReference",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages",
+    "base"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "transclusionSource",
+   "spec": {
+    "group": "block",
+    "content": "(paragraph | heading | blockquote | codeBlock | horizontalRule | bulletList | orderedList | taskList | image | video | audio | attachment | callout | details | embed | mathBlock | table | drawio | excalidraw | pdf | subpages | columns | youtube)+",
+    "isolating": true,
+    "attrs": {
+     "id": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph",
+    "heading",
+    "blockquote",
+    "bulletList",
+    "orderedList",
+    "taskList",
+    "codeBlock",
+    "horizontalRule",
+    "image",
+    "video",
+    "audio",
+    "attachment",
+    "pdf",
+    "drawio",
+    "excalidraw",
+    "table",
+    "callout",
+    "details",
+    "columns",
+    "mathBlock",
+    "embed",
+    "youtube",
+    "subpages"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "transclusionReference",
+   "spec": {
+    "group": "block",
+    "selectable": true,
+    "attrs": {
+     "sourcePageId": null,
+     "transclusionId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "footnotes",
+   "spec": {
+    "content": "footnote*",
+    "isolating": true,
+    "attrs": {
+     "class": "footnotes"
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "footnote"
+   ],
+   "validEmpty": true
+  },
+  {
+   "name": "footnote",
+   "spec": {
+    "content": "paragraph+",
+    "isolating": true,
+    "attrs": {
+     "id": null,
+     "data-id": null
+    }
+   },
+   "isLeaf": false,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [
+    "paragraph"
+   ],
+   "validEmpty": false
+  },
+  {
+   "name": "mathInline",
+   "spec": {
+    "group": "inline",
+    "inline": true,
+    "attrs": {
+     "text": ""
+    }
+   },
+   "isLeaf": true,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "mathBlock",
+   "spec": {
+    "group": "block",
+    "selectable": true,
+    "attrs": {
+     "text": ""
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "mention",
+   "spec": {
+    "group": "inline",
+    "inline": true,
+    "attrs": {
+     "id": null,
+     "label": null,
+     "entityType": null,
+     "entityId": null,
+     "slugId": null,
+     "creatorId": null,
+     "anchorId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "status",
+   "spec": {
+    "group": "inline",
+    "inline": true,
+    "attrs": {
+     "text": "",
+     "color": "gray"
+    }
+   },
+   "isLeaf": true,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "footnoteReference",
+   "spec": {
+    "group": "inline",
+    "inline": true,
+    "attrs": {
+     "class": "footnote-ref",
+     "data-id": null,
+     "referenceNumber": null,
+     "href": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": true,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "embed",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": "",
+     "provider": "",
+     "align": "center",
+     "width": 800,
+     "height": 600
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "youtube",
+   "spec": {
+    "group": "block",
+    "isolating": true,
+    "selectable": true,
+    "attrs": {
+     "src": null,
+     "start": 0,
+     "width": 640,
+     "height": 480
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "subpages",
+   "spec": {
+    "group": "block",
+    "selectable": true
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  },
+  {
+   "name": "base",
+   "spec": {
+    "group": "block",
+    "selectable": true,
+    "attrs": {
+     "pageId": null
+    }
+   },
+   "isLeaf": true,
+   "isInline": false,
+   "isTextblock": false,
+   "allowedMarks": [],
+   "validChildren": [],
+   "validEmpty": true
+  }
+ ],
+ "marks": [
+  {
+   "name": "link",
+   "spec": {
+    "inclusive": false,
+    "attrs": {
+     "href": null,
+     "target": "_blank",
+     "rel": "noopener noreferrer nofollow",
+     "class": null,
+     "internal": false
+    }
+   }
+  },
+  {
+   "name": "bold",
+   "spec": {}
+  },
+  {
+   "name": "italic",
+   "spec": {}
+  },
+  {
+   "name": "underline",
+   "spec": {}
+  },
+  {
+   "name": "strike",
+   "spec": {}
+  },
+  {
+   "name": "code",
+   "spec": {
+    "inclusive": false
+   }
+  },
+  {
+   "name": "highlight",
+   "spec": {
+    "attrs": {
+     "color": null,
+     "colorName": null
+    }
+   }
+  },
+  {
+   "name": "textStyle",
+   "spec": {
+    "attrs": {
+     "color": null
+    }
+   }
+  },
+  {
+   "name": "subscript",
+   "spec": {}
+  },
+  {
+   "name": "superscript",
+   "spec": {}
+  },
+  {
+   "name": "comment",
+   "spec": {
+    "inclusive": false,
+    "stackable": true,
+    "attrs": {
+     "commentId": null,
+     "resolved": false
+    }
+   }
+  }
+ ],
+ "groups": {
+  "block": [
+   "paragraph",
+   "heading",
+   "blockquote",
+   "bulletList",
+   "orderedList",
+   "taskList",
+   "codeBlock",
+   "horizontalRule",
+   "pageBreak",
+   "image",
+   "video",
+   "audio",
+   "attachment",
+   "pdf",
+   "drawio",
+   "excalidraw",
+   "table",
+   "callout",
+   "details",
+   "columns",
+   "transclusionSource",
+   "transclusionReference",
+   "mathBlock",
+   "embed",
+   "youtube",
+   "subpages",
+   "base"
+  ],
+  "inline": [
+   "hardBreak",
+   "text",
+   "mathInline",
+   "mention",
+   "status",
+   "footnoteReference"
+  ],
+  "list": [
+   "bulletList",
+   "orderedList",
+   "taskList"
+  ]
+ }
+}

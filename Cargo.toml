@@ -1,0 +1,15 @@
+# The Rust server lives next to the Bun server, in src/server-rs.
+[workspace]
+members = ["src/server-rs"]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true
+
+# Dependencies are built optimized even in dev and test builds: password
+# hashing and JSON handling are unusably slow otherwise.
+[profile.dev.package."*"]
+opt-level = 2

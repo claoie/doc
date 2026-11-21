@@ -3,7 +3,7 @@ import { InvalidToken, Unavailable, type AuthEvent, type Login } from "server/li
 import { HttpError, notFound, ok, publicGet, publicPost, readText, type Context } from "server/lib/http";
 import { log } from "server/lib/logger";
 import { rateLimit } from "server/lib/ratelimit";
-import { applyClaims, applyEvent, authClient, findOrCreateUser, loginFailure, ssoMode, type SsoError } from "server/lib/sso";
+import { applyEvent, authClient, loginFailure, resolveUser, ssoMode, type SsoError } from "server/lib/sso";
 
 /** Events are one signed token each; anything near this size is not one. */
 const EVENT_LIMIT = 64 * 1024;
@@ -61,9 +61,8 @@ export const routes = [
       return refuse(ctx, loginFailure(error));
     }
     try {
-      const found = await findOrCreateUser(login.claims, login.idClaims);
-      if (typeof found === "string") return refuse(ctx, found);
-      const user = await applyClaims(found, login.claims, login.idClaims);
+      const user = await resolveUser(login.claims, login.idClaims);
+      if (typeof user === "string") return refuse(ctx, user);
       // Activation is doc's own: the provider let this person in, but an admin here deactivated them.
       if (user.deactivated_at) return refuse(ctx, "deactivated");
       await signIn(ctx, user.id, { sid: login.claims.sid, refreshToken: login.refreshToken ?? null });

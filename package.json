@@ -13,7 +13,12 @@
     "build-server": "bun build ./src/server/start.ts --target bun --outfile ./build/server/bundle.js",
     "build-client": "vite build",
     "start": "bun ./build/server/bundle.js",
-    "test": "bun test src",
+    "build-server-rs": "cargo build --release -p doc-server",
+    "start-rs": "./target/release/doc-server",
+    "test": "bun test src/common src/server/ src/client",
+    "test:rs": "cargo test -p doc-server",
+    "test:api": "bun test src/api-tests",
+    "test:api:rust": "bun run build-server-rs && API_TEST_SERVER=rust bun test src/api-tests",
     "lint": "bun --bun eslint src",
     "typecheck": "bun run --bun tsc --noEmit"
   },

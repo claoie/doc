@@ -187,6 +187,29 @@ TEST_DATABASE_URL=postgres://localhost:5432/doc_test bun run test   # the test d
 bun run build && bun run start
 ```
 
+The API suite in `src/api-tests` starts a built server as a process of its own and tests every endpoint
+through HTTP and WebSocket only. The same files run against the Bun server and against the Rust server
+(below); they wipe the test database too:
+
+```sh
+TEST_DATABASE_URL=postgres://localhost:5432/doc_test bun run test:api        # the Bun server
+TEST_DATABASE_URL=postgres://localhost:5432/doc_test bun run test:api:rust   # the Rust server (needs cargo)
+```
+
+## The Rust server
+
+`src/server-rs` is the same backend written in Rust, side by side with `src/server`: the same API, database,
+migrations, storage and environment variables. It is held to the Bun server's behaviour by the API suite and
+by fixtures generated from the TypeScript; `src/server-rs/README.md` says how, and lists the few known
+differences (the main one: it cannot connect to Postgres over TLS).
+
+```sh
+bun run build-client && bun run build-server-rs
+./target/release/doc-server                      # or: docker build -f Dockerfile.rust .
+```
+
+The binary reads the environment only; unlike Bun it does not load `.env` (`set -a; . ./.env; set +a` first).
+
 ## Architecture
 
 - `src/common/editor` — the document model, schema, change steps with position mapping, the
@@ -197,6 +220,8 @@ bun run build && bun run start
 - `src/client/app` — the React web app.
 - `src/server` — HTTP API (`docs/api.md`), WebSocket collaboration (`src/server/realtime`), Postgres
   access through `Bun.SQL`, migrations in `src/server/db/migrations`.
+- `src/server-rs` — the same server in Rust (see above).
+- `src/api-tests` — the API suite both servers pass.
 
 Collaboration uses a central authority: the server holds each open document and a version number and
 accepts a batch of changes only when it was made against the current version; clients rebase their

@@ -163,6 +163,7 @@ const displayName = (claims: AccessClaims) => (claims.name.trim() || claims.user
 const verifiedEmail = (idClaims: IdClaims) => (idClaims.email_verified === true ? asEmail(idClaims.email) : null);
 
 const isUniqueViolation = (error: unknown) => (error as { errno?: string })?.errno === "23505";
+const isDeadlock = (error: unknown) => (error as { errno?: string })?.errno === "40P01";
 
 const findBySub = async (sub: string): Promise<UserRow | null> => {
   const [row] = await sql`SELECT * FROM users WHERE auth_sub = ${sub}`;
@@ -273,6 +274,31 @@ export const applyClaims = async (user: UserRow, claims: AccessClaims, idClaims?
     if (!email || !isUniqueViolation(error)) throw error;
     const [row] = await update(null, false);
     return (row as UserRow | undefined) ?? user;
+  }
+};
+
+const RESOLVE_TRIES = 3;
+
+/**
+ * The local user a sign-in is for, with the provider's claims applied; or why
+ * there is none.
+ *
+ * Two sign-ins of one person at the same moment can each hold a row the other
+ * needs: when AUTH_LINK_USERS points at one account and the ID token's email
+ * at another, one sign-in gives the first account that email (and waits for
+ * the second account's row) while the other links the second account to the
+ * subject (and waits for the first account's). The database ends one of the
+ * two statements. Nothing of it was written, and by then the other sign-in
+ * is through, so the one that was ended starts over and finds the account.
+ */
+export const resolveUser = async (claims: AccessClaims, idClaims: IdClaims): Promise<UserRow | SsoError> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const found = await findOrCreateUser(claims, idClaims);
+      return typeof found === "string" ? found : await applyClaims(found, claims, idClaims);
+    } catch (error) {
+      if (!isDeadlock(error) || attempt >= RESOLVE_TRIES) throw error;
+    }
   }
 };
 

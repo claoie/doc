@@ -1,0 +1,10 @@
+# The Rust server (src/server-rs) answers as the Bun server does only with the
+# Unicode tables of this toolchain's standard library: `to_lowercase` and
+# `to_uppercase` have to agree with JavaScript's, and a newer toolchain knows
+# case pairs the pinned Bun does not. `cargo test -p doc-server` checks it
+# (tests/formula.rs, case_mappings_match). Move this together with the Bun
+# version in package.json and with the image tag in Dockerfile.rust.
+[toolchain]
+channel = "1.97.0"
+profile = "minimal"
+components = ["clippy"]
