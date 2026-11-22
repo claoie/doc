@@ -87,8 +87,10 @@ Deliberate, small, and none reachable by the web client in normal use:
 - A multipart upload sent without a `Content-Length` is refused with 413 as soon as it has passed the size of
   a form; the Bun server reads it to its end (up to the limit for any body) and then refuses the image, with
   another message.
-- A socket whose client has stopped reading is closed (1008) once 16 MiB wait to be written to it. The Bun
-  server keeps the socket and drops what would go past that.
+- A socket whose client has stopped reading is closed once 16 MiB wait to be written to it. The close
+  (1008) waits behind what is queued, so a client that reads again within about ten seconds receives it;
+  otherwise the connection is dropped, and what was queued for it with it. The Bun server keeps the socket
+  and drops what would go past that.
 - A stopping server refuses new connections at once; the Bun server accepts them until it has saved what it
   holds, and turns sockets away with 1013.
 - Letters, case and normalization come from the Unicode tables of the Rust standard library and crates, the

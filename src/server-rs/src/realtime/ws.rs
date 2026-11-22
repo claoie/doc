@@ -254,7 +254,24 @@ async fn serve(upgraded: Upgraded, user: AuthUser, session: AuthSession, spaces:
         .await;
     }
     drop(ws);
-    let _ = tokio::time::timeout(Duration::from_secs(5), writer).await;
+    finish_or_stop(writer, WRITER_GRACE).await;
+}
+
+/// How long a socket's writer may take, once the socket has ended, to send
+/// what is still queued for it. A peer that has stopped reading would keep the
+/// writer waiting for as long as it holds the connection open, and with it
+/// the connection and everything queued for it (up to `MAX_BACKLOG_BYTES`).
+const WRITER_GRACE: Duration = Duration::from_secs(5);
+
+/// Waits up to `grace` for a task to end, and stops it if it has not: dropping
+/// a task's handle would leave the task running. Either way the task, and what
+/// it holds, is gone when this returns.
+async fn finish_or_stop(mut task: tokio::task::JoinHandle<()>, grace: Duration) {
+    if tokio::time::timeout(grace, &mut task).await.is_err() {
+        task.abort();
+        // Returns once the task has been dropped.
+        let _ = task.await;
+    }
 }
 
 async fn refresh_spaces(sockets: Vec<SocketRef>) -> Result<()> {
@@ -372,4 +389,36 @@ pub async fn shutdown_realtime() {
     }
     // Let the close frames leave before the process does.
     tokio::time::sleep(Duration::from_millis(50)).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::oneshot::{self, error::TryRecvError};
+
+    #[tokio::test]
+    async fn a_writer_that_cannot_finish_is_stopped() {
+        // A writer stuck on a peer that does not read, holding what it would send.
+        let (held, released) = oneshot::channel::<()>();
+        let stuck = tokio::spawn(async move {
+            let _held = held;
+            std::future::pending::<()>().await;
+        });
+        finish_or_stop(stuck, Duration::from_millis(20)).await;
+        // What it held is dropped, as a writer's connection and queue would be.
+        let mut released = released;
+        assert_eq!(released.try_recv(), Err(TryRecvError::Closed));
+    }
+
+    #[tokio::test]
+    async fn a_writer_that_finishes_in_time_is_left_to_finish() {
+        let (done, finished) = oneshot::channel::<()>();
+        let quick = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let _ = done.send(());
+        });
+        finish_or_stop(quick, Duration::from_secs(5)).await;
+        let mut finished = finished;
+        assert_eq!(finished.try_recv(), Ok(()));
+    }
 }
