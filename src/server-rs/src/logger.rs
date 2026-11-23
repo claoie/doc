@@ -5,6 +5,7 @@ use std::io::Write;
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::{Map, Value};
 
+use crate::alarm::send_alarm;
 use crate::config::config;
 use crate::jsutil::js_json;
 
@@ -19,22 +20,27 @@ pub fn iso(time: DateTime<Utc>) -> String {
 }
 
 fn write(level: &str, message: &str, fields: Option<Value>, error: Option<&str>) {
+    let mut extra = match fields {
+        Some(Value::Object(fields)) => fields,
+        _ => Map::new(),
+    };
+    if let Some(error) = error {
+        extra.insert("error".into(), Value::String(error.into()));
+    }
     let mut line = Map::new();
     line.insert("t".into(), Value::String(now_iso()));
     line.insert("level".into(), Value::String(level.into()));
     line.insert("msg".into(), Value::String(message.into()));
-    if let Some(Value::Object(fields)) = fields {
-        line.extend(fields);
-    }
-    if let Some(error) = error {
-        line.insert("error".into(), Value::String(error.into()));
-    }
+    line.extend(extra.clone());
     let text = js_json(&Value::Object(line));
     // A closed pipe must not take the server down.
     if level == "info" {
         let _ = writeln!(std::io::stdout().lock(), "{text}");
     } else {
         let _ = writeln!(std::io::stderr().lock(), "{text}");
+    }
+    if level == "error" {
+        send_alarm(message, extra);
     }
 }
 

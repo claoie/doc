@@ -89,6 +89,8 @@ pub struct Config {
     pub s3: S3Config,
     pub mail: MailConfig,
     pub log_requests: bool,
+    /// Discord webhook that error log lines are posted to (`alarm.rs`), or `None` to post none.
+    pub alarm_webhook: Option<String>,
     /// `None` when `AUTH_ISSUER` is unset.
     pub sso: Option<SsoConfig>,
     /// Password sign-in, setup, invitations and resets: always without SSO, and with it only when `AUTH_LOCAL_LOGIN` is on.
@@ -141,6 +143,7 @@ impl Config {
                 from_name: env("MAIL_FROM_NAME").unwrap_or_else(|| "Doc".into()),
             },
             log_requests: env("LOG_REQUESTS").as_deref() != Some("0"),
+            alarm_webhook: env("DISCORD_ALARM_WEBHOOK"),
             local_login: sso.as_ref().is_none_or(|s| s.local_login),
             sso,
         }

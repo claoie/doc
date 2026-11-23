@@ -1,4 +1,5 @@
 import { config } from "server/config";
+import { sendAlarm } from "server/lib/alarm";
 
 type Fields = Record<string, unknown>;
 
@@ -6,6 +7,11 @@ const write = (level: "info" | "warn" | "error", message: string, fields?: Field
   const line = JSON.stringify({ t: new Date().toISOString(), level, msg: message, ...fields });
   if (level === "info") console.log(line);
   else console.error(line);
+  if (level === "error") {
+    sendAlarm(message, fields ?? {}).catch((error) =>
+      write("warn", "sending an alarm failed", { alarm: message, error: error instanceof Error ? error.message : String(error) }),
+    );
+  }
 };
 
 const errorFields = (error: unknown): Fields =>
