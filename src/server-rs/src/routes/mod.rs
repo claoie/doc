@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod bases;
+pub mod client_errors;
 pub mod comments;
 pub mod export;
 pub mod favorites;

@@ -250,6 +250,22 @@ Kinds: `comment.created`, `comment.reply`, `comment.mention`, `page.mention`, `p
 Emails follow the user's notification preferences. Page update notifications go to watchers other than the
 editors, at most once per page per user every 7 hours.
 
+## Client errors
+
+| method | path | body | returns |
+|---|---|---|---|
+| POST | `/client-error` | `{ message, url?, stack? }` | `{}`; logs the report as an error line `client error` with the reporter's `userId`. Rate limited (10/min per IP). |
+
+`message` and `url` are trimmed, at most 1000 characters each; `stack` is kept as sent, at most 4000. The web
+app reports each error it did not handle (an uncaught error with an error object, or an unhandled rejection)
+once per page load, at most five per page load, with the page's path but not its query string.
+
+Every error log line, these reports included, is posted to `DISCORD_ALARM_WEBHOOK` when it is set: the message
+as an embed title (`doc: <message>`, at most 256 characters) and the line's other fields as `key: value` lines
+in a code block (at most 4000 characters). Each message is posted at most once a minute, and at most ten
+posts go out a minute in all. A post the webhook refuses or that can't be delivered is logged as a warning,
+`sending an alarm failed`, never as another error.
+
 ## Realtime
 
 One WebSocket per tab at `/api/ws` (session cookie). Messages are JSON objects with a `t` field.

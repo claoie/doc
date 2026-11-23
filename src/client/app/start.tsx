@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { useCallback, useEffect, useState } from "react";
 import type { AuthConfig, Space, User, Workspace } from "common/api-types";
 import { api, ApiError, setUnauthorizedHandler } from "./api";
+import { startErrorReports } from "./error-reports";
 import { match, navigate, useLocation } from "./router";
 import { AppProvider, applyTheme } from "./store";
 import { FeedbackProvider, Spinner } from "./components/ui";
@@ -110,6 +111,8 @@ const Redirect = ({ to }: { to: string }) => {
   useEffect(() => navigate(to, { replace: true }), [to]);
   return null;
 };
+
+startErrorReports();
 
 createRoot(document.getElementById("root")!).render(
   <FeedbackProvider>

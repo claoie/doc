@@ -50,6 +50,7 @@ fn all_routes() -> Vec<Route> {
     all.extend(routes::shares::routes());
     all.extend(routes::notifications::routes());
     all.extend(routes::export::routes());
+    all.extend(routes::client_errors::routes());
     all
 }
 

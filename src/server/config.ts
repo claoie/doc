@@ -65,6 +65,10 @@ export const config = {
   get logRequests() {
     return env("LOG_REQUESTS") !== "0";
   },
+  /** Discord webhook that error log lines are posted to (lib/alarm.ts), or undefined to post none. */
+  get alarmWebhook() {
+    return env("DISCORD_ALARM_WEBHOOK");
+  },
   /**
    * Single sign-on through an OpenID Connect provider, or null when
    * `AUTH_ISSUER` is unset. Checked at start by `ssoProblems` (lib/sso.ts).

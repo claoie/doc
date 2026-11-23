@@ -8,6 +8,7 @@ import type { SocketData } from "server/realtime/hub";
 import { upgrade, websocket } from "server/realtime/ws";
 import { routes as authRoutes } from "server/routes/auth";
 import { routes as baseRoutes } from "server/routes/bases";
+import { routes as clientErrorRoutes } from "server/routes/client-errors";
 import { routes as commentRoutes } from "server/routes/comments";
 import { routes as exportRoutes } from "server/routes/export";
 import { routes as favoriteRoutes } from "server/routes/favorites";
@@ -48,6 +49,7 @@ const router = new Router([
   ...shareRoutes,
   ...notificationRoutes,
   ...exportRoutes,
+  ...clientErrorRoutes,
 ]);
 
 const clientIp = (req: Request, server: Server<SocketData>): string => {

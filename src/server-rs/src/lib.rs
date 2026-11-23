@@ -5,6 +5,7 @@
 //! (`src/api-tests`). Modules keep the names of the TypeScript files they
 //! port, so the two can be read side by side.
 
+pub mod alarm;
 pub mod app;
 pub mod auth;
 pub mod auth_client;
