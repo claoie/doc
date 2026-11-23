@@ -10,6 +10,6 @@
  * but never import the server's own code.
  */
 export { Client, uniqueIp, type ApiResponse, type ClientOptions } from "./client";
-export { databaseUrl, doc, sql, startServer, STATIC_FILES, target, until, type StartOptions, type Target, type TestServer } from "./server";
+export { bothServers, databaseUrl, doc, rustBinary, sql, startServer, STATIC_FILES, target, until, type StartOptions, type Target, type TestServer } from "./server";
 export { startFakeSmtp, type FakeSmtp, type FakeSmtpOptions, type ReceivedMail } from "./smtp";
 export { connect, type ConnectOptions, type Message, type Socket } from "./ws";

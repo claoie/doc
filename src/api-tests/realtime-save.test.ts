@@ -96,6 +96,18 @@ const mailsAbout = (title: string) => t.outbox.filter((m) => m.subject.includes(
 
 const untilMail = (title: string, count = 1) => until(() => mailsAbout(title).length >= count, 5000, `${count} mail(s) about ${title}`);
 
+/**
+ * Waits until `count` notifications of the page are marked as emailed. The
+ * server marks them once it has handed their mails over, so a mail can arrive
+ * a moment before its notification is marked.
+ */
+const untilEmailed = (pageId: string, count: number) =>
+  until(
+    async () => (await notificationsOf(pageId)).filter((n: any) => n.emailed).length >= count,
+    5000,
+    `${count} notification(s) marked as emailed`,
+  );
+
 const mention = (userId: unknown, label = "someone") => ({
   type: "mention",
   attrs: { id: `m-${label}`, label, entityType: "user", entityId: userId, slugId: null, creatorId: null, anchorId: null },
@@ -452,6 +464,7 @@ describe("watching and notifications after a save", () => {
     await edit(writer, target, 0, [insertText(6, "!")]);
 
     await untilMail(title, 2);
+    await untilEmailed(target.id, 2);
     expect(await notificationsOf(target.id)).toEqual(
       [ownerId, readerId].sort().map((user_id) => ({ user_id, kind: "page.updated", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: true })),
     );
@@ -504,6 +517,7 @@ describe("watching and notifications after a save", () => {
     b.send({ t: "leave", pageId: target.id });
     await untilMail(title, 1);
     await t.smtp.settle();
+    await untilEmailed(target.id, 1);
     // The reader is told, by the editor whose steps came last.
     expect(await notificationsOf(target.id)).toEqual([{ user_id: readerId, kind: "page.updated", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: true }]);
     expect(mailsAbout(title).map((m) => [m.to, m.subject])).toEqual([["reader@example.com", `writer updated ${title}`]]);
@@ -521,6 +535,7 @@ describe("watching and notifications after a save", () => {
       await edit(owner, target, 0, [insertText(6, "!")]);
       await untilMail(title, 1);
       await t.smtp.settle();
+      await untilEmailed(target.id, 1);
       expect(await notificationsOf(target.id)).toEqual([{ user_id: user.id, kind: "page.updated", actor_id: ownerId, comment_id: null, data: {}, read_at: null, emailed: true }]);
       expect(mailsAbout(title).map((m) => [m.to, m.subject])).toEqual([["space-watcher@example.com", `Owner updated ${title}`]]);
     } finally {
@@ -571,6 +586,7 @@ describe("watching and notifications after a save", () => {
     // The owner's mail shows the save's mails went out.
     await untilMail(title, 1);
     await t.smtp.settle();
+    await untilEmailed(target.id, 1);
     expect(await socket.nextOf("event", { kind: "notification" })).toEqual({ t: "event", kind: "notification" });
     const rows = await notificationsOf(target.id);
     expect(rows.find((r: any) => r.user_id === user.id)).toEqual({ user_id: user.id, kind: "page.updated", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: false });
@@ -615,6 +631,7 @@ describe("watching and notifications after a save", () => {
     await edit(writer, target, 0, [{ stepType: "replace", from: 6, to: 6, slice: [{ n: mention(readerId, "reader") }] }]);
     await untilMail(title, 2);
     await t.smtp.settle();
+    await untilEmailed(target.id, 2);
     // The mention is announced first, then the update to the watchers that are left.
     expect(await notificationsOf(target.id)).toEqual([
       { user_id: readerId, kind: "page.mention", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: true },
@@ -699,6 +716,7 @@ describe("watching and notifications after a save", () => {
     await edit(writer, target, 0, [{ stepType: "replace", from: 6, to: 6, slice: [{ n: mention(user.id, "quiet") }] }]);
     await untilMail(title, 1);
     await t.smtp.settle();
+    await untilEmailed(target.id, 1);
     expect(await notificationsOf(target.id)).toEqual([
       { user_id: user.id, kind: "page.mention", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: false },
       { user_id: ownerId, kind: "page.updated", actor_id: writerId, comment_id: null, data: {}, read_at: null, emailed: true },

@@ -3,9 +3,9 @@
 `src/server-rs` is the whole backend of `src/server` written again in Rust: the same HTTP API
 (`docs/api.md`), the same WebSocket collaboration, the same database (it embeds and applies the very
 migration files of `src/server/db/migrations`), the same files on disk or in S3, the same environment
-variables. Either server can run a deployment. They claim the same realtime lease in the same way, so one
-can take over from the other on the same database; the test suite runs pairs of the same server, not a
-mixed pair.
+variables. Either server can run a deployment, and one can replace the other in a rolling deploy: they
+claim the same realtime lease in the same way, and each reads what the other wrote.
+`src/api-tests/mixed.test.ts` runs a Bun and a Rust copy side by side to show it.
 
 ```sh
 cargo build --release -p doc-server        # or: bun run build-server-rs
@@ -38,6 +38,10 @@ Two sets of tests hold the port to the reference:
   TEST_DATABASE_URL=postgres://localhost:5432/doc_test bun run test:api        # the Bun server
   TEST_DATABASE_URL=postgres://localhost:5432/doc_test bun run test:api:rust   # the Rust server
   ```
+
+  `mixed.test.ts` starts one server of each kind on one database: realtime is handed from Bun to Rust and
+  back, and the other way, and every read gives the same answer through either server. It runs whenever
+  the Rust server is built, and is skipped otherwise.
 
   `API_TEST_SKIP_SLOW=1` leaves out the files that wait a minute for a timer; `API_TEST_ECHO_LOGS=1` prints
   what the server under test logs. A behaviour of the Bun server that looks unintended but is observable is

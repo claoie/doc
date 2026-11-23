@@ -15,6 +15,16 @@ export const target: Target = process.env.API_TEST_SERVER === "rust" ? "rust" : 
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
 
+/** The built Rust server (`cargo build --release -p doc-server`). */
+export const rustBinary = process.env.API_TEST_RUST_BIN ?? path.join(repoRoot, "target", "release", "doc-server");
+
+/**
+ * Whether both servers can be started: the Bun one always can (it is bundled
+ * from source); the Rust one once it is built.
+ */
+export const bothServers = existsSync(rustBinary);
+
+
 export const databaseUrl = process.env.TEST_DATABASE_URL ?? "postgres:///doc_test?host=/tmp";
 
 /**
@@ -67,18 +77,20 @@ interface Layout {
   cmdWithoutStatic: string[];
 }
 
-let layout: Promise<Layout> | null = null;
-let layoutDir: string | null = null;
+const layouts = new Map<Target, Promise<Layout>>();
+const layoutDirs: string[] = [];
 
 /**
  * Lays the server out as a deployment does: `<dir>/server/<executable>` with
  * the built web app in `<dir>/client`. For Bun the executable is the bundle
  * `bun run build-server` makes; for Rust it is the `doc-server` binary.
  */
-const prepare = (): Promise<Layout> =>
-  (layout ??= (async () => {
+const prepare = (which: Target): Promise<Layout> => {
+  const known = layouts.get(which);
+  if (known) return known;
+  const prepared = (async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "doc-api-tests-"));
-    layoutDir = dir;
+    layoutDirs.push(dir);
     const bare = path.join(dir, "bare", "server");
     mkdirSync(path.join(dir, "server"), { recursive: true });
     mkdirSync(bare, { recursive: true });
@@ -88,8 +100,8 @@ const prepare = (): Promise<Layout> =>
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, content);
     }
-    if (target === "rust") {
-      const built = process.env.API_TEST_RUST_BIN ?? path.join(repoRoot, "target", "release", "doc-server");
+    if (which === "rust") {
+      const built = rustBinary;
       if (!existsSync(built)) {
         throw new Error(`The Rust server is not built: ${built} does not exist. Run \`cargo build --release\` first.`);
       }
@@ -112,7 +124,10 @@ const prepare = (): Promise<Layout> =>
       staticDir,
       cmdWithoutStatic: [process.execPath, path.join(bare, "bundle.js")],
     };
-  })());
+  })();
+  layouts.set(which, prepared);
+  return prepared;
+};
 
 const freePort = (): number => {
   const probe = Bun.serve({ port: 0, fetch: () => new Response() });
@@ -132,6 +147,11 @@ export interface StartOptions {
   smtp?: FakeSmtp;
   /** Don't wait for the server to answer; for servers expected to refuse to start. */
   expectExit?: boolean;
+  /**
+   * Which server to start, for the tests that run the two side by side.
+   * Every other test leaves it to `API_TEST_SERVER`.
+   */
+  target?: Target;
 }
 
 export interface TestServer {
@@ -170,7 +190,7 @@ const running = new Set<TestServer>();
 
 process.on("exit", () => {
   for (const server of running) void server.stop("SIGKILL");
-  if (layoutDir) rmSync(layoutDir, { recursive: true, force: true });
+  for (const dir of layoutDirs) rmSync(dir, { recursive: true, force: true });
 });
 
 const collect = async (stream: ReadableStream<Uint8Array> | null | undefined, into: string[], label = "server") => {
@@ -197,7 +217,8 @@ const collect = async (stream: ReadableStream<Uint8Array> | null | undefined, in
  * `X-Forwarded-For`.
  */
 export const startServer = async (options: StartOptions = {}): Promise<TestServer> => {
-  const prepared = await prepare();
+  const which = options.target ?? target;
+  const prepared = await prepare(which);
   const connection = sql();
   if (!options.keepDatabase) {
     await connection.unsafe("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
@@ -246,7 +267,7 @@ export const startServer = async (options: StartOptions = {}): Promise<TestServe
 
   let stopping: Promise<number> | null = null;
   const server: TestServer = {
-    target,
+    target: which,
     base,
     port,
     sql: connection,
@@ -327,7 +348,7 @@ export const startServer = async (options: StartOptions = {}): Promise<TestServe
     await res?.body?.cancel();
     if (exitCode !== null) {
       running.delete(server);
-      throw new Error(`the ${target} server exited with ${exitCode} before answering:\n${logs.join("\n")}`);
+      throw new Error(`the ${which} server exited with ${exitCode} before answering:\n${logs.join("\n")}`);
     }
     if (Date.now() > deadline) {
       await server.stop("SIGKILL");
