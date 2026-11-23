@@ -16,7 +16,8 @@ bun run build-client                       # the web app, served from build/clie
 The binary reads its settings from the environment only. Bun loads a `.env` file by itself; for this server
 export it first (`set -a; . ./.env; set +a`), or it starts on the defaults.
 
-`Dockerfile.rust` builds the image with this server in place of the Bun one. The binary is about 14 MB and
+`Dockerfile.rust` builds the image with this server in place of the Bun one; it is the image CD publishes
+and deploys. The binary is about 14 MB and
 idles at about 3 MiB of memory.
 
 ## How it is kept the same

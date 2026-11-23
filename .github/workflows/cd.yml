@@ -1,6 +1,9 @@
 name: CD
 
 # Publishes the image and triggers the deploy hook once CI has passed on main.
+# The image runs the Rust server (Dockerfile.rust). ./Dockerfile builds the same
+# app with the Bun server; to go back to it, build that file instead. Either
+# runs on the same database, and one replaces the other in a rolling deploy.
 on:
   workflow_run:
     workflows: [CI]
@@ -70,7 +73,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.rust
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
