@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { MAX_ALARMS_PER_WINDOW, admitAlarm, alarmBody, resetAlarms } from "./alarm";
 
+beforeEach(resetAlarms);
 afterEach(resetAlarms);
 
 describe("admitAlarm", () => {
@@ -29,6 +30,11 @@ describe("alarmBody", () => {
         },
       ],
     });
+  });
+
+  test("keeps the fields inside the code block", () => {
+    const { description } = alarmBody("client error", { stack: "a\n```\n[link](https://example.com)\n````" }, at).embeds[0]!;
+    expect(description).toBe("```\nstack: a\n`\u200b`\u200b`\n[link](https://example.com)\n`\u200b`\u200b`\u200b`\n```");
   });
 
   test("cuts a long title to 256 characters", () => {

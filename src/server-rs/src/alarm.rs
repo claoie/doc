@@ -55,6 +55,19 @@ fn cut(text: &str, max: usize) -> String {
     }
 }
 
+/// Keeps text from closing the code block it is posted in: no two backticks stay adjacent.
+fn defuse_fences(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '`' && chars.peek() == Some(&'`') {
+            out.push('\u{200b}');
+        }
+    }
+    out
+}
+
 /// The webhook message for an error log line: its message as the title, its other fields one per line.
 pub fn alarm_body(message: &str, fields: &Map<String, Value>, at: DateTime<Utc>) -> Value {
     let lines: Vec<String> = fields
@@ -68,7 +81,7 @@ pub fn alarm_body(message: &str, fields: &Map<String, Value>, at: DateTime<Utc>)
         "allowed_mentions": { "parse": [] },
         "embeds": [{
             "title": cut(&format!("doc: {message}"), TITLE_MAX),
-            "description": format!("```\n{}\n```", cut(&lines.join("\n"), DESCRIPTION_MAX)),
+            "description": format!("```\n{}\n```", cut(&defuse_fences(&lines.join("\n")), DESCRIPTION_MAX)),
             "color": COLOR,
             "timestamp": iso(at),
         }],
@@ -115,15 +128,17 @@ mod tests {
 
     #[test]
     fn admits_one_alarm_a_minute_per_message_and_ten_in_all() {
+        // A year ahead of the real time, so an alarm another test thread counts meanwhile has aged out.
+        let base = Utc::now().timestamp_millis() + 365 * 24 * 3_600_000;
         reset_alarms();
-        assert!(admit_alarm("a", 0));
-        assert!(!admit_alarm("a", 59_999));
-        assert!(admit_alarm("a", 60_000));
+        assert!(admit_alarm("a", base));
+        assert!(!admit_alarm("a", base + 59_999));
+        assert!(admit_alarm("a", base + 60_000));
         for i in 0..9 {
-            assert!(admit_alarm(&format!("m{i}"), 60_001));
+            assert!(admit_alarm(&format!("m{i}"), base + 60_001));
         }
-        assert!(!admit_alarm("another", 60_002));
-        assert!(admit_alarm("another", 120_001));
+        assert!(!admit_alarm("another", base + 60_002));
+        assert!(admit_alarm("another", base + 120_001));
         reset_alarms();
     }
 
@@ -147,6 +162,10 @@ mod tests {
                 }],
             })
         );
+        let mut reported = Map::new();
+        reported.insert("stack".into(), json!("a\n```\n[link](https://example.com)\n````"));
+        let description = alarm_body("client error", &reported, at)["embeds"][0]["description"].as_str().unwrap().to_string();
+        assert_eq!(description, "```\nstack: a\n`\u{200b}`\u{200b}`\n[link](https://example.com)\n`\u{200b}`\u{200b}`\u{200b}`\n```");
         let long = "é".repeat(300);
         let title = alarm_body(&long, &Map::new(), at)["embeds"][0]["title"].as_str().unwrap().to_string();
         assert_eq!(title.chars().count(), 256);

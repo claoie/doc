@@ -262,9 +262,10 @@ once per page load, at most five per page load, with the page's path but not its
 
 Every error log line, these reports included, is posted to `DISCORD_ALARM_WEBHOOK` when it is set: the message
 as an embed title (`doc: <message>`, at most 256 characters) and the line's other fields as `key: value` lines
-in a code block (at most 4000 characters). Each message is posted at most once a minute, and at most ten
-posts go out a minute in all. A post the webhook refuses or that can't be delivered is logged as a warning,
-`sending an alarm failed`, never as another error.
+in a code block (at most 4000 characters; adjacent backticks are split by a zero-width space, so no text closes
+the block). Each message is posted at most once a minute, and at most ten posts go out a minute in all. A post
+the webhook refuses or that can't be delivered is logged as a warning, `sending an alarm failed`, never as
+another error.
 
 ## Realtime
 

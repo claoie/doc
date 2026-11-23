@@ -38,6 +38,9 @@ const cut = (text: string, max: number): string => {
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
 };
 
+/** Keeps text from closing the code block it is posted in: no two backticks stay adjacent. */
+const defuseFences = (text: string) => text.replace(/`(?=`)/g, "`\u200b");
+
 /** The webhook message for an error log line: its message as the title, its other fields one per line. */
 export const alarmBody = (message: string, fields: Record<string, unknown>, at: Date) => {
   const lines = Object.entries(fields)
@@ -48,7 +51,7 @@ export const alarmBody = (message: string, fields: Record<string, unknown>, at: 
     embeds: [
       {
         title: cut(`doc: ${message}`, TITLE_MAX),
-        description: `\`\`\`\n${cut(lines.join("\n"), DESCRIPTION_MAX)}\n\`\`\``,
+        description: `\`\`\`\n${cut(defuseFences(lines.join("\n")), DESCRIPTION_MAX)}\n\`\`\``,
         color: COLOR,
         timestamp: at.toISOString(),
       },

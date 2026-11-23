@@ -150,6 +150,17 @@ describe("the webhook", () => {
     );
   });
 
+  test("keeps reported text inside the code block", async () => {
+    const hook = webhook();
+    const t = await start({ DISCORD_ALARM_WEBHOOK: hook.url });
+    const stack = "a\n```\n[Sign in again](https://example.com)\n````";
+    expect((await sameSessionOn(t, owner).post("/client-error", { message: "boom", stack })).status).toBe(200);
+    const [post] = await hook.waitFor(1);
+    expect(post!.body.embeds[0].description).toBe(
+      `\`\`\`\nmessage: boom\nstack: a\n\`\u200b\`\u200b\`\n[Sign in again](https://example.com)\n\`\u200b\`\u200b\`\u200b\`\nuserId: ${ownerId}\n\`\`\``,
+    );
+  });
+
   test("a webhook that refuses or can't be reached is logged as a warning, not as another error", async () => {
     const hook = webhook();
     hook.status = 500;
