@@ -58,13 +58,28 @@ export const insertUploadedFiles = async (editor: Editor, files: File[], pageId:
   }
 };
 
-/** Opens the OS file picker. */
+let picker: HTMLInputElement | null = null;
+
+/**
+ * Opens the OS file picker. One hidden input stays in the document and is reused, so a client that
+ * cannot drive the OS dialog (browser automation) can still upload by setting files on it.
+ */
 export const pickFiles = (accept: string, multiple: boolean): Promise<File[]> =>
   new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
+    if (!picker?.isConnected) {
+      picker = document.createElement("input");
+      picker.type = "file";
+      picker.hidden = true;
+      document.body.append(picker);
+    }
+    const input = picker;
     input.accept = accept;
     input.multiple = multiple;
-    input.onchange = () => resolve(Array.from(input.files ?? []));
+    // Without this, picking the same file as last time fires no change event.
+    input.value = "";
+    input.onchange = () => {
+      input.onchange = null;
+      resolve(Array.from(input.files ?? []));
+    };
     input.click();
   });
